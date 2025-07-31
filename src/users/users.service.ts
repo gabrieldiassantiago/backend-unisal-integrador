@@ -55,6 +55,11 @@ export class UsersService {
             where: {
                 id,
             },
+            include: {
+                devices: true,
+                fallAlerts: true,
+                contacts: true,
+            }
         });
     }
 }
