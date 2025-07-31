@@ -1,4 +1,4 @@
-import { Controller, Post, Body, ConflictException, Param, Get } from '@nestjs/common';
+import { Controller, Post, Body, ConflictException, Param, Get, Patch } from '@nestjs/common';
 import { DevicesService } from './devices.service';
 import { PairDeviceDto } from './dtos/pair-device.dto';
 import { existingDevicePair } from 'src/errors/existingDevicePair';
@@ -13,13 +13,10 @@ export class DevicesController {
     try {
       return await this.devicesService.pairDevice(data);
     } catch (err) {
-      if (err instanceof existingDevicePair) {
+      if (err instanceof existingDevicePair || err instanceof noFoundUser) {
         throw new ConflictException(err.message);
       }
-      if (err instanceof noFoundUser) {
-        throw new ConflictException(err.message);
-      }
-      throw err; 
+      throw err;
     }
   }
 
@@ -27,5 +24,12 @@ export class DevicesController {
   listByUser(@Param('userId') userId: string) {
     return this.devicesService.listDevicesByUser(userId);
   }
-  
+
+  @Patch('deactivate/:deviceId/:userId')
+  async deactivate(
+    @Param('deviceId') deviceId: string,
+    @Param('userId') userId: string
+  ) {
+    return this.devicesService.deactivateDevice(deviceId, userId);
+  }
 }

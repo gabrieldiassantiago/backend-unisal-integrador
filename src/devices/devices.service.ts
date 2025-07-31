@@ -79,7 +79,7 @@ export class DevicesService {
     async deactivateDevice(deviceId: string, userId) {
         const device = await this.prismaService.device.findUnique({
             where: {
-                id: userId
+                id: deviceId
             }
         })
 
