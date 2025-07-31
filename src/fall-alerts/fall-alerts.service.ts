@@ -7,7 +7,7 @@ import { WhatsAppService } from 'src/whatsapp/whatsapp.service';
 @Injectable()
 export class FallAlertsService {
     constructor(private readonly prismaService: PrismaService, 
-        private whatsappService: WhatsAppService, // Assuming you have a WhatsApp service to send messages
+        private whatsappService: WhatsAppService, 
     ) {
         this.whatsappService = whatsappService;
     }
@@ -40,19 +40,6 @@ export class FallAlertsService {
             }
         });
 
-        const contacts = await this.prismaService.emergencyContact.findMany({
-            where: {
-                patientId: device.userId
-            }
-        })
-
-        for (const contact of contacts) {
-            await this.whatsappService.enviarTexto(
-                contact.phone,
-                `Alerta de queda detectado para ${device.userId}. Localização: ${data.latitude}, ${data.longitude}`
-            );
-        }
-        
         return {
             id: alert.id,
             deviceId: alert.deviceId,
@@ -63,17 +50,54 @@ export class FallAlertsService {
             patientId: alert.patientId
         };
     }
-      async getAlertsByPatient(patientId: string) {
+
+    async getAlertsByPatient(patientId: string) {
+
     return this.prismaService.fallAlert.findMany({
       where: { patientId },
       orderBy: { createdAt: 'desc' }
     });
   }
 
-  async confirmAlert(alertId: string) {
+    async confirmAlert(alertId: string) { //refatorar isso o quanto antes
+        
+    const alert = await this.prismaService.fallAlert.findUnique({
+        where: { id: alertId },
+    });
+
+    const patient = await this.prismaService.user.findUnique({
+        where: { id: alert.patientId },
+    });
+
+    if (!alert) {
+        throw new Error('Alerta não encontrado.');
+    }
+
+    const contatos = await this.prismaService.emergencyContact.findMany({
+        where: { patientId: alert.patientId },
+        select: { phone: true, name: true }
+    });
+
+    if (contatos.length === 0) {
+        throw new Error('Nenhum contato de emergência encontrado para o paciente.');
+    }
+
+    for (const contact of contatos) {
+        try {
+        await this.whatsappService.enviarTexto(
+            contact.phone, 
+            `Alerta de queda confirmado para o paciente ${patient.name}. Por favor, verifique o bem-estar dele.`
+        );
+        } catch (error) {
+        console.error(`Erro ao enviar mensagem para o contato ${contact.name}:`, error);
+        }
+    }
+
     return this.prismaService.fallAlert.update({
-      where: { id: alertId },
+        where: { id: alertId },
         data: { status: 'CONFIRMED' }
     });
-  }
+    
+}
+
 }

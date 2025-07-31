@@ -15,6 +15,7 @@ export class UsersService {
                 email: createUserDto.email,
             },
         })
+        
         if (existingUser) {
             throw new ExistingError(createUserDto.email);
         }

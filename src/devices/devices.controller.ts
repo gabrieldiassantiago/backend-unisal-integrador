@@ -27,4 +27,5 @@ export class DevicesController {
   listByUser(@Param('userId') userId: string) {
     return this.devicesService.listDevicesByUser(userId);
   }
+  
 }
