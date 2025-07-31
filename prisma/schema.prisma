@@ -1,0 +1,88 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modelo principal para qualquer usuário (paciente ou cuidador)
+model User {
+  id          String   @id @default(uuid())      // Identificador único (UUID)
+  name        String                             // Nome completo do usuário
+  email       String   @unique                   // Email único para login/recuperação
+  password    String                             // Senha hash 
+  role        Role                               // Paciente ou cuidador
+  hasAccount  Boolean  @default(false)           // Se o paciente já ativou a conta
+  createdAt   DateTime @default(now())           // Data de criação
+  // Relações
+  devices     Device[]                           // Dispositivos/placas deste paciente
+  contacts    EmergencyContact[]                 // Contatos de emergência do paciente
+  patients    CaregiverPatient[] @relation("CaregiverPatients")   // Pacientes deste cuidador
+  caregivers  CaregiverPatient[] @relation("PatientCaregivers")   // Cuidadores deste paciente
+  fallAlerts  FallAlert[] @relation("FallAlertPatient")           // Alertas deste paciente
+}
+
+// Modelo para representar uma placa/dispositivo físico
+model Device {
+  id              String   @id @default(uuid())       // UUID do dispositivo
+  deviceIdentifier String   @unique                   // ID físico/serial da placa
+  apiKeyHash      String                              // Hash da chave de autenticação
+  isActive        Boolean  @default(true)             // Dispositivo ativo ou não
+  userId          String                              // ID do dono (paciente)
+  user            User     @relation(fields: [userId], references: [id])  // Relação com User
+  registeredAt    DateTime @default(now())            // Data de registro da placa
+  fallAlerts      FallAlert[] @relation("FallAlertDevice")                // Alertas vindos dessa placa
+}
+
+// Modelo para contato de emergência do paciente
+model EmergencyContact {
+  id        String   @id @default(uuid())          // UUID do contato
+  name      String                                 // Nome do contato
+  phone     String   @unique                       // Telefone (usar string para suportar DDD, +55, etc)
+  patientId String                                 // FK para User (paciente)
+  patient   User     @relation(fields: [patientId], references: [id]) // Relação com User
+}
+
+// Relação N:N entre cuidadores e pacientes
+model CaregiverPatient {
+  id           String @id @default(uuid())         // UUID da relação
+  caregiverId  String                             // FK do cuidador
+  patientId    String                             // FK do paciente
+  caregiver    User   @relation("CaregiverPatients", fields: [caregiverId], references: [id]) // Cuidador
+  patient      User   @relation("PatientCaregivers", fields: [patientId], references: [id])   // Paciente
+}
+
+// Evento de queda detectado pelo sistema
+model FallAlert {
+  id           String      @id @default(uuid())    // UUID do alerta
+  deviceId     String                                 // FK do dispositivo que detectou
+  patientId    String                                 // FK do paciente envolvido
+  device       Device      @relation("FallAlertDevice", fields: [deviceId], references: [id]) // Relação com Device
+  patient      User        @relation("FallAlertPatient", fields: [patientId], references: [id]) // Relação com User
+  status       FallStatus                             // Status do alerta (enum)
+  latitude     Float                                  // Latitude do evento
+  longitude    Float                                  // Longitude do evento
+  createdAt    DateTime    @default(now())            // Quando o alerta foi criado
+  confirmedAt  DateTime?                              // Quando foi confirmado (opcional)
+}
+
+// Enum para definir os papéis dos usuários
+enum Role {
+  PATIENT
+  CAREGIVER
+}
+// Enum para definir os status dos alertas de queda
+enum FallStatus {
+  PENDING
+  CONFIRMED
+  IGNORED
+}
