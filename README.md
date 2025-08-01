@@ -44,6 +44,9 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+The API documentation is available via Swagger once the server is running.
+Open [http://localhost:3002/docs](http://localhost:3002/docs) in your browser.
+
 ## Run tests
 
 ```bash

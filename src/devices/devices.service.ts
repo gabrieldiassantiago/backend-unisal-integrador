@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PairDeviceDto } from './dtos/pair-device.dto';
 import { existingDevicePair } from 'src/errors/existingDevicePair';
@@ -84,7 +84,7 @@ export class DevicesService {
         })
 
         if (!device || device.userId !== userId) {
-            throw new Error(`Dispositivo com ID ${deviceId} não encontrado ou não pertence ao usuário com ID ${userId}.`);
+            throw new NotFoundException(`Dispositivo com ID ${deviceId} não encontrado ou não pertence ao usuário com ID ${userId}.`);
         }
 
         return this.prismaService.device.update({
