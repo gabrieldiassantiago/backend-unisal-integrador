@@ -1,7 +1,9 @@
 import { Controller, Post, Body, Get, Query, Patch, Param } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { FallAlertsService } from './fall-alerts.service';
 import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
 
+@ApiTags('fall-alerts')
 @Controller('fall-alerts')
 export class FallAlertsController {
   constructor(private readonly fallAlertsService: FallAlertsService) {}

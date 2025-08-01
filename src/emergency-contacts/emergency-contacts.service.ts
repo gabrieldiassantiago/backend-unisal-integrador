@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateEmergencyContactDto } from './dtos/CreateEmergencyContactDto';
 
@@ -15,7 +15,7 @@ export class EmergencyContactsService {
         })
 
         if (!patientExists) {
-            throw new Error(`Paciente com ID ${data.patientId} não encontrado.`);
+            throw new NotFoundException(`Paciente com ID ${data.patientId} não encontrado.`);
         }
 
         return this.prismaService.emergencyContact.create({

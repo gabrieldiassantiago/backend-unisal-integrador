@@ -1,9 +1,11 @@
 import { Controller, Post, Body, ConflictException, Param, Get, Patch } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { DevicesService } from './devices.service';
 import { PairDeviceDto } from './dtos/pair-device.dto';
 import { existingDevicePair } from 'src/errors/existingDevicePair';
 import { noFoundUser } from 'src/errors/noFoundUser';
 
+@ApiTags('devices')
 @Controller('devices')
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
