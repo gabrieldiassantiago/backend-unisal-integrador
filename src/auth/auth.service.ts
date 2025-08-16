@@ -19,11 +19,32 @@ export class AuthService {
     return null;
   }
 
-  async login(user: any) {
+    async login(user: any) {
+
     const payload = { sub: user.id, email: user.email, role: user.role };
     return {
       access_token: this.jwtService.sign(payload),
       user: payload,
     };
+    
+  }
+
+    async resetPassword(email: string, password: string) {
+    const user = await this.prisma.user.findUnique({where: {email}});
+
+    if (!user) {
+      throw new Error('Usuário não encontrado');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await this.prisma.user.update({
+      where: {email},
+      data: {
+        password: hashedPassword
+      }
+    })
+    return {
+      message: 'Senha resetada com sucesso',
+    }
   }
 }
