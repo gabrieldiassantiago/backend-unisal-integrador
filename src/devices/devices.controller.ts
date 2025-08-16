@@ -3,11 +3,18 @@ import { DevicesService } from './devices.service';
 import { PairDeviceDto } from './dtos/pair-device.dto';
 import { existingDevicePair } from 'src/errors/existingDevicePair';
 import { noFoundUser } from 'src/errors/noFoundUser';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('devices')
 @Controller('devices')
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
 
+  @ApiOperation({
+    summary: 'Associar um dispositivo a um usuário',
+    description: 'Associa um dispositivo ao usuário com base no ID do usuário, número de série e chave de API.',
+  })
+  
   @Post('pair')
   async pair(@Body() data: PairDeviceDto) {
     try {

@@ -18,7 +18,8 @@ export class DevicesService {
 
         const userExists = await this.prismaService.user.findUnique({
             where: {
-                id: data.userId
+                id: data.userId //e se é paciente
+
             }
         })
 
@@ -43,6 +44,7 @@ export class DevicesService {
                 isActive: true,
                 registeredAt: new Date(),
             },
+            
             create: {
                 deviceIdentifier: data.serial,
                 apiKeyHash,
