@@ -32,17 +32,28 @@ export class WhatsAppService implements OnModuleInit {
 
       if (connection === 'open') {
         this.isConnected = true;
-        // Exibe apenas o console verde quando conectado
         console.log('\x1b[32m%s\x1b[0m', '✅ WhatsApp conectado com sucesso!');
         this.logger.log('WhatsApp conectado');
+
+        // 🚀 Envia mensagem teste assim que conectar
+        try {
+          await this.enviarTexto('5512981082276', '🚀 Conexão estabelecida com sucesso!');
+          this.logger.log('Mensagem de teste enviada para 5512981082276');
+        } catch (err) {
+          this.logger.error('Erro ao enviar mensagem de teste:', err);
+        }
       }
 
       if (connection === 'close') {
         this.isConnected = false;
-        
-        if ((lastDisconnect?.error as Boom)?.output?.statusCode === DisconnectReason.restartRequired) {
+
+        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+
+        if (statusCode === DisconnectReason.restartRequired) {
           this.logger.warn('Conexão perdida, reconectando...');
           this.startSocket();
+        } else {
+          this.logger.warn(`Conexão fechada (${statusCode}), aguardando ação...`);
         }
       }
 
@@ -63,8 +74,8 @@ export class WhatsAppService implements OnModuleInit {
     this.logger.log(`Mensagem enviada para ${jid}`);
   }
 
-  async gerarPairingCode(phoneNumber: string) : Promise<string> {
-     if (!this.sock) {
+  async gerarPairingCode(phoneNumber: string): Promise<string> {
+    if (!this.sock) {
       throw new Error('Socket Baileys não está inicializado.');
     }
     const code = await this.sock.requestPairingCode(phoneNumber);
