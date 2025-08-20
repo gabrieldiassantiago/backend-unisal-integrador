@@ -1,88 +1,193 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-// Modelo principal para qualquer usuário (paciente ou cuidador)
+// =================== MODELS ===================
+
 model User {
-  id          String   @id @default(uuid())      // Identificador único (UUID)
-  name        String                             // Nome completo do usuário
-  email       String   @unique                   // Email único para login/recuperação
-  password    String                             // Senha hash 
-  role        Role                               // Paciente ou cuidador
-  hasAccount  Boolean  @default(false)           // Se o paciente já ativou a conta
-  createdAt   DateTime @default(now())           // Data de criação
-  // Relações
-  devices     Device[]                           // Dispositivos/placas deste paciente
-  contacts    EmergencyContact[]                 // Contatos de emergência do paciente
-  patients    CaregiverPatient[] @relation("CaregiverPatients")   // Pacientes deste cuidador
-  caregivers  CaregiverPatient[] @relation("PatientCaregivers")   // Cuidadores deste paciente
-  fallAlerts  FallAlert[] @relation("FallAlertPatient")           // Alertas deste paciente
+  id         String   @id @default(uuid())
+  name       String
+  age        Int?                         // relevante para pacientes
+  email      String?  @unique             // opcional (pacientes não precisam)
+  password   String?                      // <-- opcional: paciente sem senha
+  role       Role
+  hasAccount Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  // relações
+  devices       Device[]
+  contacts      EmergencyContact[]
+  patients      CaregiverPatient[] @relation("CaregiverPatients")   // pacientes deste cuidador
+  caregivers    CaregiverPatient[] @relation("PatientCaregivers")   // cuidadores deste paciente
+  fallAlerts    FallAlert[]        @relation("FallAlertPatient")
+
+  // access codes
+  issuedCodes   AccessCode[] @relation("IssuedByCaregiver")         // códigos emitidos por este cuidador
+  loginCodes    AccessCode[] @relation("LoginForPatient")           // códigos destinados a este paciente
+
+  // sessões
+  refreshTokens RefreshToken[]
+
+  @@index([role])
 }
 
-// Modelo para representar uma placa/dispositivo físico
 model Device {
-  id              String   @id @default(uuid())       // UUID do dispositivo
-  deviceIdentifier String   @unique                   // ID físico/serial da placa
-  apiKeyHash      String                              // Hash da chave de autenticação
-  isActive        Boolean  @default(true)             // Dispositivo ativo ou não
-  userId          String                              // ID do dono (paciente)
-  user            User     @relation(fields: [userId], references: [id])  // Relação com User
-  registeredAt    DateTime @default(now())            // Data de registro da placa
-  fallAlerts      FallAlert[] @relation("FallAlertDevice")                // Alertas vindos dessa placa
+  id               String   @id @default(uuid())
+  deviceIdentifier String   @unique           // QR aponta pra isso ou para token
+  apiKeyHash       String
+  status           DeviceStatus @default(ACTIVE)
+  
+  // Pareamento por QR/token (opcional)
+  pairingDigest    String?   @unique          // HMAC(token, secret)
+  pairingExpiresAt DateTime?
+  pairedAt         DateTime?
+
+  // Telemetria / manutenção
+  lastSeenAt       DateTime?
+  firmwareVersion  String?
+
+  // Dono (paciente)
+  patientId        String?   // <- deixe opcional
+  patient          User?      @relation(fields: [patientId], references: [id])
+  registeredAt     DateTime @default(now())
+
+  fallAlerts       FallAlert[] @relation("FallAlertDevice")
+
+  @@index([patientId])
 }
 
-// Modelo para contato de emergência do paciente
 model EmergencyContact {
-  id        String   @id @default(uuid())          // UUID do contato
-  name      String                                 // Nome do contato
-  phone     String   @unique                       // Telefone (usar string para suportar DDD, +55, etc)
-  patientId String                                 // FK para User (paciente)
-  patient   User     @relation(fields: [patientId], references: [id]) // Relação com User
+  id        String   @id @default(uuid())
+  name      String
+  phone     String   @unique
+  patientId String
+  patient   User     @relation(fields: [patientId], references: [id])
+
+  // alerts que este contato confirmou
+  confirmedAlerts FallAlert[] @relation("FallAlertConfirmedBy")
+
+  priority  Int      @default(1)
 }
 
-// Relação N:N entre cuidadores e pacientes
 model CaregiverPatient {
-  id           String @id @default(uuid())         // UUID da relação
-  caregiverId  String                             // FK do cuidador
-  patientId    String                             // FK do paciente
-  caregiver    User   @relation("CaregiverPatients", fields: [caregiverId], references: [id]) // Cuidador
-  patient      User   @relation("PatientCaregivers", fields: [patientId], references: [id])   // Paciente
+  id          String   @id @default(uuid())
+  caregiverId String
+  patientId   String
+  createdAt   DateTime @default(now())
+
+  caregiver User @relation("CaregiverPatients", fields: [caregiverId], references: [id])
+  patient   User @relation("PatientCaregivers", fields: [patientId], references: [id])
+
+  @@unique([caregiverId, patientId])
+  @@index([patientId])
 }
 
-// Evento de queda detectado pelo sistema
 model FallAlert {
-  id           String      @id @default(uuid())    // UUID do alerta
-  deviceId     String                                 // FK do dispositivo que detectou
-  patientId    String                                 // FK do paciente envolvido
-  device       Device      @relation("FallAlertDevice", fields: [deviceId], references: [id]) // Relação com Device
-  patient      User        @relation("FallAlertPatient", fields: [patientId], references: [id]) // Relação com User
-  status       FallStatus                             // Status do alerta (enum)
-  latitude     Float                                  // Latitude do evento
-  longitude    Float                                  // Longitude do evento
-  createdAt    DateTime    @default(now())            // Quando o alerta foi criado
-  confirmedAt  DateTime?                              // Quando foi confirmado (opcional)
+  id           String   @id @default(uuid())
+  deviceId     String
+  patientId    String
+
+  device       Device   @relation("FallAlertDevice", fields: [deviceId], references: [id])
+  patient      User     @relation("FallAlertPatient", fields: [patientId], references: [id])
+
+  status       FallStatus
+  latitude     Float
+  longitude    Float
+  createdAt    DateTime @default(now())
+  confirmedAt  DateTime?
+  location     String?
+
+  confirmedByContactId String?
+  confirmedBy          EmergencyContact? @relation("FallAlertConfirmedBy", fields: [confirmedByContactId], references: [id])
+
+  confirmationMethod   ConfirmationMethod?
+
+  @@index([patientId, createdAt])
 }
 
-// Enum para definir os papéis dos usuários
+// Código de LOGIN simplificado para paciente e/ou de PAREAMENTO de device
+model AccessCode {
+  id            String   @id @default(uuid())
+
+  // segurança
+  codeDigest    String   @unique    // HMAC(code, secret) -> lookup/indexável
+  codeHash      String               // bcrypt(code) -> proteção em repouso
+  codeDisplay   String               // ex.: "123-456" (apenas para exibir/log leve)
+  type          CodeType @default(LOGIN_PATIENT)
+
+  caregiverId   String
+  caregiver     User     @relation("IssuedByCaregiver", fields: [caregiverId], references: [id])
+
+  patientId     String
+  patient       User     @relation("LoginForPatient", fields: [patientId], references: [id])
+
+  // ciclo de vida
+  expiresAt     DateTime
+  usedAt        DateTime?
+  revokedAt     DateTime?
+  revokedById   String?             // opcional: quem revogou (cuidador/admin)
+
+  // controle de uso
+  maxUses       Int      @default(1)
+  uses          Int      @default(0)
+  attempts      Int      @default(0)
+  lastAttemptAt DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([caregiverId])
+  @@index([patientId])
+  @@index([expiresAt])
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  deviceId   String?              // identifica o aparelho (opcional)
+  tokenHash  String   @unique     // hash do refresh token (nunca guarde em claro)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  @@index([userId])
+}
+
+// =================== ENUMS ===================
+
 enum Role {
   PATIENT
   CAREGIVER
 }
-// Enum para definir os status dos alertas de queda
+
 enum FallStatus {
   PENDING
   CONFIRMED
   IGNORED
+}
+
+enum ConfirmationMethod {
+  WHATSAPP
+  APP
+  CALL
+  OTHER
+}
+
+enum CodeType {
+  LOGIN_PATIENT
+  DEVICE_PAIRING
+}
+
+enum DeviceStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  REVOKED
 }
