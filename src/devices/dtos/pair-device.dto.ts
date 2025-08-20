@@ -3,12 +3,12 @@ import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
 
 export class PairDeviceDto {
   @ApiProperty({
-    description: 'ID do usuário',
+    description: 'ID do paciente dono do dispositivo',
     example: '123e4567-e89b-12d3-a456-426614174000',
     type: 'string',
   })
   @IsUUID()
-  userId: string;
+  patientId: string;
 
   @ApiProperty({
     description: 'Número de série do dispositivo',
@@ -24,7 +24,6 @@ export class PairDeviceDto {
     example: '1234567890abcdef',
     type: 'string',
   })
-  
   @IsNotEmpty()
   @IsString()
   apiKey: string;
