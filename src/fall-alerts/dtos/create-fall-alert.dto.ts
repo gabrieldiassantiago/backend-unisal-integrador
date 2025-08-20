@@ -19,5 +19,5 @@ export class CreateFallAlertDto {
 
   @IsNotEmpty()
   @IsString()
-  timestamp: string; // ISO string
+  timestamp: string; 
 }

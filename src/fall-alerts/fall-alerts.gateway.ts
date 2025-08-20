@@ -8,7 +8,6 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
 
 @WebSocketGateway({
   namespace: 'fall-alerts',
@@ -16,7 +15,9 @@ import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
   cors: { origin: '*' },
 })
 export class FallAlertsGateway
+
   implements OnGatewayConnection, OnGatewayDisconnect
+
 {
   @WebSocketServer() server: Server;
 
