@@ -3,7 +3,7 @@ import { CaregiverController } from './caregiver.controller';
 import { CaregiverService } from './caregiver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtModule } from '@nestjs/jwt';
-import { JwtAuthGuard } from '@src/auth/wt-auth.guard';
+import { JwtAuthGuard } from '@src/auth/jwt-auth.guard';
 
 @Module({
   imports: [JwtModule.register({})],

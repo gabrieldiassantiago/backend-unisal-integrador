@@ -4,7 +4,7 @@ import {
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiUnauthorizedResponse, ApiForbiddenResponse } from '@nestjs/swagger';
 import { CaregiverService } from './caregiver.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
-import { JwtAuthGuard } from '@src/auth/wt-auth.guard';
+import { JwtAuthGuard } from '@src/auth/jwt-auth.guard';
 import { CurrentUserId } from '@src/common/decorators/current-user-id.decorator';
 
 @ApiTags('Caregiver')
