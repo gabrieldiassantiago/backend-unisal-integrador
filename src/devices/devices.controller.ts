@@ -5,7 +5,7 @@ import { existingDevicePair } from 'src/errors/existingDevicePair';
 import { noFoundUser } from 'src/errors/noFoundUser';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
-@ApiTags('devices')
+@ApiTags('Dispositivo (ESP32)')
 @Controller('devices')
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
