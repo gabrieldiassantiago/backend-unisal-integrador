@@ -4,7 +4,6 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsDateString,
   ValidateNested,
   IsArray,
 } from 'class-validator';
@@ -41,7 +40,11 @@ export class FallAlertDto {
   @IsString()
   patientId: string;
 
-  @ApiProperty({ description: 'Data de criação (ISO) ou Date object', example: '2024-01-01T12:00:00Z' })
+  @ApiProperty({
+    description: 'Data de criação (ISO string ou Date object)',
+    example: '2024-01-01T12:00:00Z',
+    required: false,
+  })
   @IsOptional()
   createdAt?: string | Date;
 
@@ -69,7 +72,11 @@ export class PatientProfileDto {
   @IsEmail()
   email?: string;
 
-  @ApiProperty({ description: 'Data de criação (ISO) ou Date object', example: '2024-01-01T12:00:00Z', required: false })
+  @ApiProperty({
+    description: 'Data de criação (ISO string ou Date object)',
+    example: '2024-01-01T12:00:00Z',
+    required: false,
+  })
   @IsOptional()
   createdAt?: string | Date;
 
