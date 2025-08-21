@@ -34,6 +34,7 @@
     "@nestjs/swagger": "^11.2.0",
     "@nestjs/websockets": "^11.1.5",
     "@prisma/client": "6.13.0",
+    "@scalar/nestjs-api-reference": "^0.5.12",
     "@types/qrcode-terminal": "^0.12.2",
     "baileys": "^6.7.18",
     "bcrypt": "^6.0.0",
