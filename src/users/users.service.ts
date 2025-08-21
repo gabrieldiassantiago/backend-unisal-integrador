@@ -57,6 +57,12 @@ export class UsersService {
         devices: true,
         fallAlerts: true,
         contacts: true,
+        patients: {
+          select: {
+            id: true,
+            patient: true
+          }
+        }
       },
     });
   }
