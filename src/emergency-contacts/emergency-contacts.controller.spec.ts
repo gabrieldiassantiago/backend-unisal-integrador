@@ -9,6 +9,8 @@ describe('EmergencyContactsController', () => {
       controllers: [EmergencyContactsController],
     }).compile();
 
+    
+
     controller = module.get<EmergencyContactsController>(EmergencyContactsController);
   });
 

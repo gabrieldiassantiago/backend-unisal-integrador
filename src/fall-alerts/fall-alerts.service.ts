@@ -104,12 +104,15 @@ export class FallAlertsService {
       throw new BadRequestException('Nenhum contato de emergência encontrado para o paciente.');
     }
 
+    const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
+
     // envia WhatsApp pra todos
     for (const contact of contatos) {
       try {
         await this.whatsappService.enviarTexto(
           contact.phone,
           `🚨 Alerta de queda confirmado para o paciente ${patient.name}. 
+      Localização: ${googleMapsLink}
       Por favor, verifique o bem-estar dele.`,
         );
       } catch (err) {

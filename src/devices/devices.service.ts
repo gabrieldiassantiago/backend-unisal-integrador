@@ -32,14 +32,14 @@ export class DevicesService {
       where: { deviceIdentifier: data.serial },
       update: {
         apiKeyHash,
-        patientId: data.patientId,     // 👈 agora é patientId
-        status: 'ACTIVE',           // 👈 no lugar do isActive
+        patientId: data.patientId,     
+        status: 'ACTIVE',           
         registeredAt: new Date(),
       },
       create: {
         deviceIdentifier: data.serial,
         apiKeyHash,
-        patientId: data.patientId,     // 👈 agora é patientId
+        patientId: data.patientId,     
         status: 'ACTIVE',
         registeredAt: new Date(),
       },
@@ -48,8 +48,8 @@ export class DevicesService {
     return {
       id: device.id,
       deviceIdentifier: device.deviceIdentifier,
-      patientId: device.patientId, // 👈 devolve patientId
-      status: device.status,       // 👈 devolve status
+      patientId: device.patientId, 
+      status: device.status,       
       registeredAt: device.registeredAt,
     };
   }
@@ -80,7 +80,7 @@ export class DevicesService {
 
     return this.prismaService.device.update({
       where: { id: deviceId },
-      data: { status: 'INACTIVE' }, // 👈 troca isActive por status
+      data: { status: 'INACTIVE' }, 
     });
   }
 }
