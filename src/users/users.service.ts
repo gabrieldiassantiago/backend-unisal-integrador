@@ -1,18 +1,21 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../../src/prisma/prisma.service';
 import { CreateUserDto } from './dtos/create-user.dto';
 import * as bcrypt from 'bcrypt';
+import { ExistingEmailError } from '../../src/errors/existingUserError';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createUser(dto: CreateUserDto) {
+
     const email = dto.email.toLowerCase().trim();
 
     const existing = await this.prisma.user.findUnique({ where: { email } });
+    
     if (existing) {
-      throw new ConflictException(`User with email ${email} already exists`);
+      throw new ExistingEmailError(`Usuário com o email ${email} já existe`);
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
@@ -30,6 +33,8 @@ export class UsersService {
 
     return user;
   }
+
+
 
   async getAllUsers() {
     // Se ficar pesado, troque por selects específicos ou paginação
