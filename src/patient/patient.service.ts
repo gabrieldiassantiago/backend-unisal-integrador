@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
+import { PatientNotFoundError } from '@src/errors/patientNotFound';
 
 function normalizeCode(s: string) {
   return s.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
@@ -69,7 +70,7 @@ export class PatientService {
     };
   }
 
-  async getProfile(patientId: string) {
+  async getProfilePatient(patientId: string) {
     const patient = await this.prisma.user.findUnique({
       where: { id: patientId },
       select: {
@@ -80,15 +81,15 @@ export class PatientService {
         contacts: true,
         fallAlerts: {
           orderBy: { createdAt: 'desc' },
-          take: 5,
+          take: 5, //quantidade de coisas que serao pegadas
         },
       },
     });
 
     if (!patient) {
-      throw new NotFoundException('Paciente não encontrado');
+      throw new PatientNotFoundError(patientId);
     }
 
     return patient;
-  }
+  } 
 }

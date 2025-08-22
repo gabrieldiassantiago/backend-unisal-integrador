@@ -10,3 +10,4 @@ import { JwtModule } from '@nestjs/jwt';
   providers: [PatientService, PrismaService],
 })
 export class PatientModule {}
+              

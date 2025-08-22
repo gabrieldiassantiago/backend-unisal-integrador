@@ -45,6 +45,6 @@ export class PatientController {
   })
   @ApiUnauthorizedResponse({ description: 'Token inválido ou ausente' })
   getProfile(@Request() req): Promise<PatientProfileDto> {
-    return this.svc.getProfile(req.user.userId);
+    return this.svc.getProfilePatient(req.user.userId);
   }
 }
