@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { PrismaService } from '../../src/prisma/prisma.service';
-import { CreateUserDto } from './dtos/create-user.dto';
+import { ExistingEmailError } from '@src/errors/existingUserError';
 import * as bcrypt from 'bcrypt';
-import { ExistingEmailError } from '../../src/errors/existingUserError';
+import { CreateUserDto } from './dtos/create-user.dto';
+import { PrismaService } from '@src/prisma/prisma.service';
 
 @Injectable()
 export class UsersService {
@@ -37,7 +37,6 @@ export class UsersService {
 
 
   async getAllUsers() {
-    // Se ficar pesado, troque por selects específicos ou paginação
     return this.prisma.user.findMany({
       include: {
         devices: true,

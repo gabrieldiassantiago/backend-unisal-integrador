@@ -9,17 +9,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNDECLARED
+}
 // =================== MODELS ===================
 
 model User {
   id         String   @id @default(uuid())
   name       String
-  age        Int?                         // relevante para pacientes
+  birthDate  DateTime?
   email      String?  @unique             // opcional (pacientes não precisam)
   password   String?                      // <-- opcional: paciente sem senha
   role       Role
   hasAccount Boolean  @default(false)
   createdAt  DateTime @default(now())
+  gender     Gender?
+
 
   // relações
   devices       Device[]
