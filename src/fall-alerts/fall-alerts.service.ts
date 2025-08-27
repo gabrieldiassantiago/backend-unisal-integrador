@@ -10,6 +10,7 @@ import { Queue } from 'bullmq';
 import { deviceNotExisting } from '@src/errors/deviceNoExist';
 import { apiKeyInvalid } from '@src/errors/apiKeyInvalid';
 import { alertNoExisting } from '@src/errors/alertNoExistint';
+import { TwilioService } from '@src/twilio/twilio.service';
 
 @Injectable()
 export class FallAlertsService {
@@ -18,6 +19,7 @@ export class FallAlertsService {
     private readonly prismaService: PrismaService,
     private readonly whatsappService: WhatsAppService,
     private readonly gateway: FallAlertsGateway,
+    private readonly twilioService: TwilioService,
   ) {}
 
   // 🚨 Criar novo alerta
@@ -91,13 +93,15 @@ export class FallAlertsService {
     const patient = await this.prismaService.user.findUnique({
       where: { id: alert.patientId },
     });
+    
     if (!patient) {
       throw new NotFoundException('Paciente não encontrado.');
     }
 
     const contatos = await this.prismaService.emergencyContact.findMany({
       where: { patientId: alert.patientId },
-      select: { phone: true, name: true },
+      select: { phone: true, name: true, priority: true },
+      orderBy: { priority: 'asc' },
     });
 
     if (contatos.length === 0) {
@@ -106,18 +110,49 @@ export class FallAlertsService {
 
     const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
 
-    // envia WhatsApp pra todos
+    // Envia WhatsApp para todos os contatos
     for (const contact of contatos) {
       try {
         await this.whatsappService.enviarTexto(
           contact.phone,
-          `🚨 Alerta de queda confirmado para o paciente ${patient.name}. 
-      Localização: ${googleMapsLink}
-      Por favor, verifique o bem-estar dele.`,
+          `🚨 Alerta de queda confirmado para o paciente ${patient.name}.
+           Localização: ${googleMapsLink}
+           Por favor, verifique o bem-estar dele.`,
         );
       } catch (err) {
         console.error(`Falha ao enviar WhatsApp para ${contact.name}:`, err);
       }
+    }
+
+    // Lógica de ligação com prioridade
+    let callAnswered = false;
+    for (const contact of contatos) {
+      if (callAnswered) break;
+
+      try {
+        console.log(`Tentando ligar para ${contact.name} (prioridade ${contact.priority})...`);
+        const call = await this.twilioService.makeFallAlertCall(contact.phone, patient.name);
+
+        // Espera um pouco para a chamada ser completada
+        await new Promise(resolve => setTimeout(resolve, 20000)); // 20 segundos
+
+        const callRecord = await this.twilioService.client.calls(call.sid).fetch();
+
+        if (callRecord.status === 'completed') {
+          console.log(`Chamada atendida por ${contact.name}.`);
+          callAnswered = true;
+        } else {
+          console.log(`Chamada para ${contact.name} não atendida (status: ${callRecord.status}).`);
+        }
+      } catch (err) {
+        console.error(`Falha ao ligar para ${contact.name}:`, err);
+      }
+    }
+
+    if (!callAnswered) {
+      console.log('Nenhum contato de emergência atendeu à chamada.');
+      
+     
     }
 
     // atualiza status
