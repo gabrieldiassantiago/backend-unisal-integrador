@@ -18,14 +18,17 @@ export class CaregiverService {
 
   async createPatientPairDeviceAndLoginCode(caregiverId: string, dto: CreatePatientAndPairDto) {
     const cg = await this.prisma.user.findUnique({ where: { id: caregiverId } });
+
     if (!cg || cg.role !== 'CAREGIVER') throw new ForbiddenException('Apenas cuidadores');
 
     if (!dto.deviceSerial || !dto.deviceApiKey) {
       throw new BadRequestException('Device obrigatório para cadastrar paciente.');
     }
+
     if (!dto.emergencyContacts?.length) {
       throw new BadRequestException('Envie ao menos um contato de emergência.');
     }
+
     const phones = dto.emergencyContacts.map(c => c.phone);
     if (new Set(phones).size !== phones.length) {
       throw new BadRequestException('Há telefones de contato repetidos no payload.');
@@ -129,4 +132,31 @@ export class CaregiverService {
       };
     });
   }
+
+  async renewLoginCode(caregiverId: string, patientId: string, ttlMinutes?: number) {
+  // Validar se caregiver realmente é dono do vínculo
+  const link = await this.prisma.caregiverPatient.findUnique({
+    where: { caregiverId_patientId: { caregiverId, patientId } },
+  });
+  if (!link) throw new ForbiddenException('Você não pode renovar este código.');
+
+  const ttl = clampTtl(ttlMinutes);
+  const expiresAt = new Date(Date.now() + ttl * 60 * 1000);
+
+  const raw = norm(genNumeric(6));
+  const codeDigest = crypto.createHmac('sha256', process.env.CODE_SECRET || 'dev')
+    .update(raw).digest('hex');
+  const codeHash = await bcrypt.hash(raw, 10);
+
+  const login = await this.prisma.accessCode.create({
+    data: {
+      codeDigest, codeHash, codeDisplay: display(raw),
+      caregiverId, patientId, type: 'LOGIN_PATIENT',
+      expiresAt, maxUses: 1,
+    },
+    select: { codeDisplay: true, expiresAt: true },
+  });
+
+  return login;
+}
 }
