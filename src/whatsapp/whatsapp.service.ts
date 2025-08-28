@@ -69,7 +69,7 @@ export class WhatsAppService implements OnModuleInit {
 
   async enviarTexto(telefone: string, mensagem: string) {
     if (!this.sock) throw new Error('Socket Baileys não está inicializado.');
-    const jid = telefone.replace(/\D/g, '') + '@s.whatsapp.net';
+    const jid = `${telefone.replace(/\D/g, '')}@s.whatsapp.net`;
     await this.sock.sendMessage(jid, { text: mensagem });
     this.logger.log(`Mensagem enviada para ${jid}`);
   }
