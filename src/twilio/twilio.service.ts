@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Twilio } from 'twilio';
 
 @Injectable()
-export class TwilioService implements OnModuleInit {
+export class TwilioService {
   public client: Twilio;
 
   constructor(private readonly configService: ConfigService) {
@@ -30,13 +30,5 @@ export class TwilioService implements OnModuleInit {
     }
   }
 
-  async onModuleInit() {
-    console.log('[TwilioService] Testando ligação...');
-    try {
-      await this.makeFallAlertCall('+5512981082276', 'gab');
-      console.log('[TwilioService] Sucesso!');
-    } catch (err: any) {
-      console.error('[TwilioService] Erro:', err.message);
-    }
-  }
+  
 }
