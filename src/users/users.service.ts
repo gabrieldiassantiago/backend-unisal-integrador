@@ -59,14 +59,31 @@ export class UsersService {
         hasAccount: true,
         createdAt: true,
         devices: true,
-        fallAlerts: true,
         contacts: true,
+        fallAlerts: true, 
         patients: {
           select: {
-            id: true,
-            patient: true
-          }
-        }
+            id: true, 
+            patient: {
+              select: {
+                id: true,
+                name: true,
+                birthDate: true,
+                gender: true,
+                hasAccount: true,
+                _count: {
+                  select: { fallAlerts: true },
+                },
+                fallAlerts: {
+                  orderBy: {
+                    createdAt: 'desc',
+                  },
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
       },
     });
   }

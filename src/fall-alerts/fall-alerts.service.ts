@@ -151,8 +151,6 @@ export class FallAlertsService {
 
     if (!callAnswered) {
       console.log('Nenhum contato de emergência atendeu à chamada.');
-      
-     
     }
 
     // atualiza status
