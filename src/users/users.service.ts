@@ -49,7 +49,7 @@ export class UsersService {
   }
 
  async getUserProfile(id: string) {
-  // Busca o usuário com os relacionamentos básicos
+  // Busca o usuário com pacientes + alerts aninhados
   const user = await this.prisma.user.findUnique({
     where: { id },
     select: {
@@ -71,6 +71,12 @@ export class UsersService {
               birthDate: true,
               gender: true,
               hasAccount: true,
+              _count: {
+                select: { fallAlerts: true },
+              },
+              fallAlerts: {
+                orderBy: { createdAt: 'desc' },
+              },
             },
           },
         },
@@ -78,12 +84,10 @@ export class UsersService {
     },
   });
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
-  // Puxa todos os fallAlerts de todos os pacientes vinculados ao caregiver
-  const fallAlerts = await this.prisma.fallAlert.findMany({
+  // Busca todos os fallAlerts de todos os pacientes vinculados
+  const allFallAlerts = await this.prisma.fallAlert.findMany({
     where: {
       patient: {
         caregivers: {
@@ -106,7 +110,7 @@ export class UsersService {
 
   return {
     ...user,
-    fallAlerts,
+    fallAlerts: allFallAlerts,
   };
 }
 
