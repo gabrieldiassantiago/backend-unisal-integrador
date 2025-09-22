@@ -48,43 +48,66 @@ export class UsersService {
     });
   }
 
-  async getUserProfile(id: string) {
-    return this.prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        hasAccount: true,
-        createdAt: true,
-        devices: true,
-        contacts: true,
-        fallAlerts: true, 
-        patients: {
-          select: {
-            id: true, 
-            patient: {
-              select: {
-                id: true,
-                name: true,
-                birthDate: true,
-                gender: true,
-                hasAccount: true,
-                _count: {
-                  select: { fallAlerts: true },
-                },
-                fallAlerts: {
-                  orderBy: {
-                    createdAt: 'desc',
-                  },
-                 
-                },
-              },
+ async getUserProfile(id: string) {
+  // Busca o usuário com os relacionamentos básicos
+  const user = await this.prisma.user.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      hasAccount: true,
+      createdAt: true,
+      devices: true,
+      contacts: true,
+      patients: {
+        select: {
+          id: true,
+          patient: {
+            select: {
+              id: true,
+              name: true,
+              birthDate: true,
+              gender: true,
+              hasAccount: true,
             },
           },
         },
       },
-    });
+    },
+  });
+
+  if (!user) {
+    return null;
   }
+
+  // Puxa todos os fallAlerts de todos os pacientes vinculados ao caregiver
+  const fallAlerts = await this.prisma.fallAlert.findMany({
+    where: {
+      patient: {
+        caregivers: {
+          some: { caregiverId: id },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      patient: {
+        select: {
+          id: true,
+          name: true,
+          birthDate: true,
+          gender: true,
+        },
+      },
+    },
+  });
+
+  return {
+    ...user,
+    fallAlerts,
+  };
+}
+
 }
