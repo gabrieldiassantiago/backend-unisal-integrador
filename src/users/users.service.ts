@@ -49,7 +49,8 @@ export class UsersService {
   }
 
   async getUserProfile(id: string) {
-    return this.prisma.user.findUnique({
+    // Primeiro buscamos o usuário com relações aninhadas
+    const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
         id: true,
@@ -58,12 +59,28 @@ export class UsersService {
         role: true,
         hasAccount: true,
         createdAt: true,
+        // fall alerts diretamente ligados ao user (se existir relação direta)
+        fallAlerts: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            deviceId: true,
+            patientId: true,
+            status: true,
+            latitude: true,
+            longitude: true,
+            createdAt: true,
+            confirmedAt: true,
+            location: true,
+            confirmedByContactId: true,
+            confirmationMethod: true,
+          },
+        },
         devices: true,
         contacts: true,
-        fallAlerts: true, 
         patients: {
           select: {
-            id: true, 
+            id: true, // id da relação pivot (ex: caregiverPatient)
             patient: {
               select: {
                 id: true,
@@ -75,10 +92,22 @@ export class UsersService {
                   select: { fallAlerts: true },
                 },
                 fallAlerts: {
-                  orderBy: {
-                    createdAt: 'desc',
+                  orderBy: { createdAt: 'desc' },
+                  // Ajuste aqui se quiser limitar (ex: take: 50, skip: 0)
+                  // take: 100,
+                  select: {
+                    id: true,
+                    deviceId: true,
+                    patientId: true,
+                    status: true,
+                    latitude: true,
+                    longitude: true,
+                    createdAt: true,
+                    confirmedAt: true,
+                    location: true,
+                    confirmedByContactId: true,
+                    confirmationMethod: true,
                   },
-                
                 },
               },
             },
@@ -86,5 +115,7 @@ export class UsersService {
         },
       },
     });
+
+    return user;
   }
 }
