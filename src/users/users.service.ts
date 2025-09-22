@@ -78,7 +78,7 @@ export class UsersService {
                   orderBy: {
                     createdAt: 'desc',
                   },
-                  take: 1,
+                 
                 },
               },
             },

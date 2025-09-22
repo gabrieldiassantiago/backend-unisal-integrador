@@ -68,7 +68,14 @@ export class PatientService {
     // marca uso
     await this.prisma.accessCode.update({
       where: { id: accessCode.id },
-      data: { uses: { increment: 1 } },
+      data: { uses: { increment: 1 }, },
+      //atualizar hasAccount para true
+    });
+
+    //atualizar hasAccount para true
+    await this.prisma.user.update({
+      where: { id: accessCode.patientId },
+      data: { hasAccount: true },
     });
 
     // gera JWT pro paciente
@@ -89,6 +96,19 @@ export class PatientService {
         gender: accessCode.patient.gender,
         age: calcAge(accessCode.patient.birthDate),
       },
+      accessCode: {
+        id: accessCode.id,
+        createdAt: accessCode.createdAt,
+        expiresAt: accessCode.expiresAt,
+        uses: accessCode.uses + 1,
+        attempts: accessCode.attempts,
+      },
+      user: {
+        id: accessCode.patient.id,
+        name: accessCode.patient.name,
+        birthDate: accessCode.patient.birthDate,
+        gender: accessCode.patient.gender,
+        age: calcAge(accessCode.patient.birthDate)      },
     };
   }
 
