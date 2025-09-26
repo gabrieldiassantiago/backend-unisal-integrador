@@ -93,8 +93,6 @@ export class UsersService {
                 },
                 fallAlerts: {
                   orderBy: { createdAt: 'desc' },
-                  // Ajuste aqui se quiser limitar (ex: take: 50, skip: 0)
-                  // take: 100,
                   select: {
                     id: true,
                     deviceId: true,
