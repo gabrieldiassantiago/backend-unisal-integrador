@@ -36,6 +36,7 @@ export class AuthService {
     
   }
 
+    /*
     async resetPassword(email: string, password: string) {
     const user = await this.prisma.user.findUnique({where: {email}});
 
@@ -53,7 +54,8 @@ export class AuthService {
     return {
       message: 'Senha resetada com sucesso',
     }
-  }
+  } 
+  */
 
 
 }

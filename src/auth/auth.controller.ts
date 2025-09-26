@@ -52,7 +52,7 @@ export class AuthController {
     return this.authService.login(user);
   }
 
-  @Patch('reset-password')
+ /* @Patch('reset-password')
   @ApiOperation({ 
     summary: 'Resetar senha do usuário',
     description: 'Permite resetar a senha de um usuário existente' 
@@ -72,4 +72,5 @@ export class AuthController {
   async resetPassword(@Body() resetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto.email, resetPasswordDto.password);
   }
+  */
 }
