@@ -5,7 +5,7 @@ export class CreateFallAlertDto {
   @ApiProperty({
     description: 'Número de série do dispositivo ESP32',
     example: 'ESP32_001',
-    type: 'string'
+    type: 'string',
   })
   @IsNotEmpty()
   @IsString()
@@ -14,7 +14,7 @@ export class CreateFallAlertDto {
   @ApiProperty({
     description: 'Chave de API do dispositivo',
     example: '1234567890abcdef',
-    type: 'string'
+    type: 'string',
   })
   @IsNotEmpty()
   @IsString()
@@ -23,7 +23,7 @@ export class CreateFallAlertDto {
   @ApiProperty({
     description: 'Latitude da localização da queda',
     example: -23.5505,
-    type: 'number'
+    type: 'number',
   })
   @IsNotEmpty()
   @IsNumber()
@@ -32,18 +32,9 @@ export class CreateFallAlertDto {
   @ApiProperty({
     description: 'Longitude da localização da queda',
     example: -46.6333,
-    type: 'number'
+    type: 'number',
   })
   @IsNotEmpty()
   @IsNumber()
   longitude: number;
-
-  @ApiProperty({
-    description: 'Timestamp da detecção da queda',
-    example: '2024-01-15T10:30:00Z',
-    type: 'string'
-  })
-  @IsNotEmpty()
-  @IsString()
-  timestamp: string;
 }

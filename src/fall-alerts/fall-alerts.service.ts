@@ -45,7 +45,7 @@ export class FallAlertsService {
         patientId: device.patientId,
         latitude: data.latitude,
         longitude: data.longitude,
-        createdAt: new Date(data.timestamp),
+        createdAt: new Date(),
         status: 'PENDING',
       },
     });
