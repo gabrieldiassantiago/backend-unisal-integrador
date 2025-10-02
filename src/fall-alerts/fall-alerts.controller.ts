@@ -28,6 +28,7 @@ export class FallAlertsController {
     name: 'patientId',
     description: 'UUID do paciente',
     type: 'string',
+    required: true,
   })
   async getAlerts(@Query('patientId') patientId: string) {
     return this.fallAlertsService.getAlertsByPatient(patientId);
