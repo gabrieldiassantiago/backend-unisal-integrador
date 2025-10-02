@@ -1,4 +1,4 @@
-// src/fall-alerts/fall-alerts.service.ts
+// fall-alerts.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { WhatsAppService } from 'src/whatsapp/whatsapp.service';
@@ -24,7 +24,6 @@ export class FallAlertsService {
 
   // 🚨 Criar novo alerta
   async createAlert(data: CreateFallAlertDto) {
-    // 1. Busca dispositivo
     const device = await this.prismaService.device.findUnique({
       where: { deviceIdentifier: data.serial },
     });
@@ -32,13 +31,11 @@ export class FallAlertsService {
       throw new deviceNotExisting(data.serial);
     }
 
-    // 2. Valida API key
     const isValidApiKey = await bcrypt.compare(data.apiKey, device.apiKeyHash);
     if (!isValidApiKey) {
       throw new apiKeyInvalid(data.apiKey);
     }
 
-    // 3. Cria o alerta no banco
     const alert = await this.prismaService.fallAlert.create({
       data: {
         deviceId: device.id,
@@ -60,25 +57,155 @@ export class FallAlertsService {
       status: alert.status,
     };
 
-    // emite realtime no socket
+    // Emite para WebSocket
     this.gateway.emitNewAlert(payload);
 
-    // agenda auto confirm
+    // Busca cuidador prioridade 1 e envia WhatsApp
+    const primaryCaregiver = await this.prismaService.emergencyContact.findFirst({
+      where: { patientId: device.patientId, priority: 1 },
+    });
+
+    if (primaryCaregiver) {
+      const patient = await this.prismaService.user.findUnique({
+        where: { id: device.patientId },
+      });
+
+      const googleMapsLink = `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
+      
+      await this.whatsappService.enviarTexto(
+        primaryCaregiver.phone,
+        `🚨 *ALERTA DE QUEDA DETECTADO*\n\nPaciente: ${patient?.name}\nLocalização: ${googleMapsLink}\n\n⚠️ Por favor, responda pelo aplicativo:\n- "Falso Alerta"\n- "Estou Indo Verificar"`
+      );
+    }
+
+    // Agenda confirmação automática para 5 minutos
     await this.alertsQueue.add(
       'autoConfirm',
       { alertId: alert.id },
-      { delay: 5000 },
+      { delay: 300000 }, // 5 minutos
     );
 
     return payload;
   }
 
-  // 📋 Buscar alertas de um paciente
-  async getAlertsByPatient(patientId: string) {
-    return this.prismaService.fallAlert.findMany({
-      where: { patientId },
-      orderBy: { createdAt: 'desc' },
+  // 🆕 Marcar como falso alerta
+  async markFalseAlarm(alertId: string, caregiverId: string) {
+    const alert = await this.prismaService.fallAlert.findUnique({
+      where: { id: alertId },
     });
+
+    if (!alert) throw new alertNoExisting(alertId);
+    if (alert.status !== 'PENDING') {
+      throw new BadRequestException('Alerta já foi processado');
+    }
+
+    const patient = await this.prismaService.user.findUnique({
+      where: { id: alert.patientId },
+    });
+
+    const caregiver = await this.prismaService.user.findUnique({
+      where: { id: caregiverId },
+    });
+
+    // Atualiza status
+    const updated = await this.prismaService.fallAlert.update({
+      where: { id: alertId },
+      data: { 
+        status: 'FALSE_ALARM',
+        respondedBy: caregiverId,
+        respondedAt: new Date(),
+      },
+    });
+
+    // Notifica todos os cuidadores
+    const allCaregivers = await this.prismaService.emergencyContact.findMany({
+      where: { patientId: alert.patientId },
+    });
+
+    for (const contact of allCaregivers) {
+      await this.whatsappService.enviarTexto(
+        contact.phone,
+        `✅ *FALSO ALERTA*\n\nPaciente: ${patient?.name}\nAlerta marcado como falso por ${caregiver?.name}\n\nNenhuma ação necessária.`
+      );
+    }
+
+    // Emite via WebSocket
+    this.gateway.emitAlertStatusChange({
+      id: updated.id,
+      patientId: updated.patientId,
+      status: updated.status,
+      respondedBy: caregiverId,
+    });
+
+    // Cancela job de confirmação automática
+    const jobs = await this.alertsQueue.getJobs(['delayed']);
+    for (const job of jobs) {
+      if (job.data.alertId === alertId) {
+        await job.remove();
+      }
+    }
+
+    return updated;
+  }
+
+  // 🆕 Marcar como "estou verificando"
+  async markVerifying(alertId: string, caregiverId: string) {
+    const alert = await this.prismaService.fallAlert.findUnique({
+      where: { id: alertId },
+    });
+
+    if (!alert) throw new alertNoExisting(alertId);
+    if (alert.status !== 'PENDING') {
+      throw new BadRequestException('Alerta já foi processado');
+    }
+
+    const caregiver = await this.prismaService.user.findUnique({
+      where: { id: caregiverId },
+    });
+
+    // Atualiza status
+    const verificationDeadline = new Date(Date.now() + 120000); // 2 minutos
+    const updated = await this.prismaService.fallAlert.update({
+      where: { id: alertId },
+      data: { 
+        status: 'VERIFYING',
+        respondedBy: caregiverId,
+        respondedAt: new Date(),
+        verificationDeadline,
+      },
+    });
+
+    // Emite via WebSocket
+    this.gateway.emitAlertStatusChange({
+      id: updated.id,
+      patientId: updated.patientId,
+      status: updated.status,
+      respondedBy: caregiverId,
+      verificationDeadline,
+    });
+
+    // Agenda job para cobrar confirmação em 2 minutos
+    await this.alertsQueue.add(
+      'requestConfirmation',
+      { alertId: alert.id, caregiverId },
+      { delay: 120000 }, // 2 minutos
+    );
+
+    return updated;
+  }
+
+  // 🆕 Confirmar após verificação
+  async confirmAfterVerification(alertId: string, caregiverId: string) {
+    const alert = await this.prismaService.fallAlert.findUnique({
+      where: { id: alertId },
+    });
+
+    if (!alert) throw new alertNoExisting(alertId);
+    if (alert.status !== 'VERIFYING') {
+      throw new BadRequestException('Alerta não está em verificação');
+    }
+
+    return this.confirmAlert(alertId);
   }
 
   // ✅ Confirmar alerta (manda msg pra todos os contatos)
@@ -86,9 +213,7 @@ export class FallAlertsService {
     const alert = await this.prismaService.fallAlert.findUnique({
       where: { id: alertId },
     });
-    if (!alert) {
-      throw new alertNoExisting(alert);
-    }
+    if (!alert) throw new alertNoExisting(alert);
 
     const patient = await this.prismaService.user.findUnique({
       where: { id: alert.patientId },
@@ -115,9 +240,7 @@ export class FallAlertsService {
       try {
         await this.whatsappService.enviarTexto(
           contact.phone,
-          `🚨 Alerta de queda confirmado para o paciente ${patient.name}.
-           Localização: ${googleMapsLink}
-           Por favor, verifique o bem-estar dele.`,
+          `🚨 *ALERTA DE QUEDA CONFIRMADO*\n\nPaciente: ${patient.name}\nLocalização: ${googleMapsLink}\n\n⚠️ Por favor, verifique o bem-estar do paciente imediatamente.`,
         );
       } catch (err) {
         console.error(`Falha ao enviar WhatsApp para ${contact.name}:`, err);
@@ -133,8 +256,7 @@ export class FallAlertsService {
         console.log(`Tentando ligar para ${contact.name} (prioridade ${contact.priority})...`);
         const call = await this.twilioService.makeFallAlertCall(contact.phone, patient.name);
 
-        // Espera um pouco para a chamada ser completada
-        await new Promise(resolve => setTimeout(resolve, 20000)); // 20 segundos
+        await new Promise(resolve => setTimeout(resolve, 20000));
 
         const callRecord = await this.twilioService.client.calls(call.sid).fetch();
 
@@ -153,7 +275,7 @@ export class FallAlertsService {
       console.log('Nenhum contato de emergência atendeu à chamada.');
     }
 
-    // atualiza status
+    // Atualiza status
     const updated = await this.prismaService.fallAlert.update({
       where: { id: alertId },
       data: { status: 'CONFIRMED' },
@@ -165,9 +287,16 @@ export class FallAlertsService {
       status: updated.status,
     };
 
-    // emite realtime
+    // Emite realtime
     this.gateway.emitConfirmed(payload);
 
     return payload;
+  }
+
+  async getAlertsByPatient(patientId: string) {
+    return this.prismaService.fallAlert.findMany({
+      where: { patientId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }
