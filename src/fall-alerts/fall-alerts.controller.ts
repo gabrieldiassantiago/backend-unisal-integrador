@@ -1,5 +1,5 @@
 // fall-alerts.controller.ts
-import { Controller, Post, Body, Get, Query, Patch, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, Patch, Param, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { FallAlertsService } from './fall-alerts.service';
 import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
@@ -30,9 +30,12 @@ export class FallAlertsController {
     type: 'string',
     required: true,
   })
-  async getAlerts(@Query('patientId') patientId: string) {
-    return this.fallAlertsService.getAlertsByPatient(patientId);
+async getAlerts(@Query('patientId') patientId: string) {
+  if (!patientId) {
+    throw new BadRequestException('patientId é obrigatório');
   }
+  return this.fallAlertsService.getAlertsByPatient(patientId);
+}
 
   // 🆕 Marcar como falso alerta
   @Patch(':id/false-alarm')
