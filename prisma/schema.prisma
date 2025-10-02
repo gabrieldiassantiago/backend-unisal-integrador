@@ -5,8 +5,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = "postgresql://intelisensor:intelisensor@167.99.57.166:5432/intelisensor"
 }
 
 enum Gender {
