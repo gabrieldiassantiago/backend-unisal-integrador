@@ -1,7 +1,6 @@
 // fall-alerts.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { WhatsAppService } from 'src/whatsapp/whatsapp.service';
 import { FallAlertsGateway } from './fall-alerts.gateway';
 import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
 import * as bcrypt from 'bcrypt';
@@ -17,7 +16,6 @@ export class FallAlertsService {
   constructor(
     @InjectQueue('fall-alerts') private alertsQueue: Queue,
     private readonly prismaService: PrismaService,
-    private readonly whatsappService: WhatsAppService,
     private readonly gateway: FallAlertsGateway,
     private readonly twilioService: TwilioService,
   ) {}
@@ -72,9 +70,48 @@ export class FallAlertsService {
 
       const googleMapsLink = `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
       
-      await this.whatsappService.enviarTexto(
-        primaryCaregiver.phone,
-        `🚨 *ALERTA DE QUEDA DETECTADO*\n\nPaciente: ${patient?.name}\nLocalização: ${googleMapsLink}\n\n⚠️ Por favor, responda pelo aplicativo:\n- "Falso Alerta"\n- "Estou Indo Verificar"`
+      await this.twilioService.sendFallAlertWhatsApp(primaryCaregiver.phone, {
+        contactName: primaryCaregiver.name,
+        patientName: patient?.name || 'Paciente',
+        location: googleMapsLink,
+        priority: primaryCaregiver.priority
+      });
+      
+      // Tenta ligar para o contato prioritário com monitoramento
+      try {
+        console.log(`📞 Tentando ligar para contato prioritário: ${primaryCaregiver.name}`);
+        const call = await this.twilioService.makeFallAlertCall(primaryCaregiver.phone, patient?.name);
+        
+        console.log(`📱 Chamada iniciada para ${primaryCaregiver.name}. SID: ${call.sid}`);
+        console.log(`📞 Status imediato após criação: ${call.status}`);
+        
+        // Agenda um job para monitorar esta chamada
+        await this.alertsQueue.add(
+          'monitorCall',
+          { 
+            alertId: alert.id,
+            callSid: call.sid,
+            contactId: primaryCaregiver.id,
+            contactName: primaryCaregiver.name,
+            patientName: patient?.name
+          },
+          { delay: 5000 }, // Começa a monitorar após 5 segundos
+        );
+        
+      } catch (err) {
+        console.error('❌ Erro ao ligar para contato prioritário:', err);
+      }
+      
+      // Agenda notificação para contatos secundários após 3 minutos caso não haja resposta
+      await this.alertsQueue.add(
+        'notifySecondaryContacts',
+        { 
+          alertId: alert.id,
+          patientId: device.patientId,
+          latitude: data.latitude,
+          longitude: data.longitude
+        },
+        { delay: 180000 }, // 3 minutos
       );
     }
 
@@ -82,7 +119,7 @@ export class FallAlertsService {
     await this.alertsQueue.add(
       'autoConfirm',
       { alertId: alert.id },
-      { delay: 300000 }, // 5 minutos
+      { delay: 300000 }, // 5 minutos (300000ms)
     );
 
     return payload;
@@ -123,10 +160,10 @@ export class FallAlertsService {
     });
 
     for (const contact of allCaregivers) {
-      await this.whatsappService.enviarTexto(
-        contact.phone,
-        `✅ *FALSO ALERTA*\n\nPaciente: ${patient?.name}\nAlerta marcado como falso por ${caregiver?.name}\n\nNenhuma ação necessária.`
-      );
+      await this.twilioService.sendFalseAlarmWhatsApp(contact.phone, {
+        patientName: patient?.name || 'Paciente',
+        responderName: caregiver?.name || 'Cuidador'
+      });
     }
 
     // Emite via WebSocket
@@ -137,10 +174,11 @@ export class FallAlertsService {
       respondedBy: caregiverId,
     });
 
-    // Cancela job de confirmação automática
+    // Cancela todos os jobs relacionados a este alerta (auto confirmação e notificação de contatos secundários)
     const jobs = await this.alertsQueue.getJobs(['delayed']);
     for (const job of jobs) {
       if (job.data.alertId === alertId) {
+        console.log(`Cancelando job ${job.id} (${job.name}) relacionado ao alerta ${alertId}`);
         await job.remove();
       }
     }
@@ -184,12 +222,45 @@ export class FallAlertsService {
       verificationDeadline,
     });
 
+    // Cancela job de notificar contatos secundários, já que alguém está verificando
+    const jobs = await this.alertsQueue.getJobs(['delayed']);
+    for (const job of jobs) {
+      if (job.data.alertId === alertId && job.name === 'notifySecondaryContacts') {
+        console.log(`Cancelando job ${job.id} (${job.name}) relacionado ao alerta ${alertId}`);
+        await job.remove();
+      }
+    }
+
     // Agenda job para cobrar confirmação em 2 minutos
     await this.alertsQueue.add(
       'requestConfirmation',
       { alertId: alert.id, caregiverId },
       { delay: 120000 }, // 2 minutos
     );
+
+    // Notifica outros cuidadores
+    const patient = await this.prismaService.user.findUnique({
+      where: { id: alert.patientId },
+    });
+
+    // Notifica outros cuidadores
+    const allCaregivers = await this.prismaService.emergencyContact.findMany({
+      where: { patientId: alert.patientId },
+    });
+
+    for (const contact of allCaregivers) {
+      if (contact.id !== caregiverId) { // não envia para quem está verificando
+        const message = `Oi! 👋
+
+*${caregiver?.name}* está indo verificar a situação de *${patient?.name}*.
+
+Em alguns minutos teremos mais informações. 🕐
+
+Fique atento(a) ao celular, caso precisemos de você! 📱`;
+
+        await this.twilioService.sendWhatsAppMessage(contact.phone, message);
+      }
+    }
 
     return updated;
   }
@@ -205,10 +276,33 @@ export class FallAlertsService {
       throw new BadRequestException('Alerta não está em verificação');
     }
 
+    const patient = await this.prismaService.user.findUnique({
+      where: { id: alert.patientId },
+    });
+
+    const caregiver = await this.prismaService.user.findUnique({
+      where: { id: caregiverId },
+    });
+
+    // Notifica todos antes de confirmar
+    const allCaregivers = await this.prismaService.emergencyContact.findMany({
+      where: { patientId: alert.patientId },
+    });
+
+    for (const contact of allCaregivers) {
+      const message = `⚠️ ATENÇÃO
+
+*${caregiver?.name}* confirmou que *${patient?.name}* realmente caiu e precisa de ajuda!
+
+Vamos acionar todos os contatos de emergência agora. 🚨`;
+
+      await this.twilioService.sendWhatsAppMessage(contact.phone, message);
+    }
+
     return this.confirmAlert(alertId);
   }
 
-  // ✅ Confirmar alerta (manda msg pra todos os contatos)
+  // ✅ Confirmar alerta (prioriza o contato prioritário e só depois envia para secundários)
   async confirmAlert(alertId: string) {
     const alert = await this.prismaService.fallAlert.findUnique({
       where: { id: alertId },
@@ -225,7 +319,7 @@ export class FallAlertsService {
 
     const contatos = await this.prismaService.emergencyContact.findMany({
       where: { patientId: alert.patientId },
-      select: { phone: true, name: true, priority: true },
+      select: { id: true, phone: true, name: true, priority: true },
       orderBy: { priority: 'asc' },
     });
 
@@ -235,44 +329,390 @@ export class FallAlertsService {
 
     const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
 
-    // Envia WhatsApp para todos os contatos
-    for (const contact of contatos) {
+    // Separar o contato prioritário e os secundários
+    const contatoPrioritario = contatos.find(c => c.priority === 1);
+    const contatosSecundarios = contatos.filter(c => c.priority > 1);
+
+    // Lógica de ligação com prioridade e retentativas
+    const MAX_TENTATIVAS_POR_CONTATO = 3; // Tenta 3x por contato
+    const TEMPO_ESPERA_POR_TENTATIVA_MS = 90000; // 1.5 minutos por tentativa
+    const INTERVALO_ENTRE_TENTATIVAS_MS = 10000; // 10 segundos entre tentativas
+
+    let callAnswered = false;
+    
+    // Primeiro tenta contato prioritário
+    if (contatoPrioritario) {
+      console.log(`\n⭐ Iniciando tentativas com contato prioritário: ${contatoPrioritario.name}...`);
+      
+      // Envia WhatsApp para contato prioritário
       try {
-        await this.whatsappService.enviarTexto(
-          contact.phone,
-          `🚨 *ALERTA DE QUEDA CONFIRMADO*\n\nPaciente: ${patient.name}\nLocalização: ${googleMapsLink}\n\n⚠️ Por favor, verifique o bem-estar do paciente imediatamente.`,
-        );
+        await this.twilioService.sendEmergencyConfirmedWhatsApp(contatoPrioritario.phone, {
+          contactName: contatoPrioritario.name,
+          patientName: patient.name,
+          location: googleMapsLink,
+          priority: contatoPrioritario.priority
+        });
       } catch (err) {
-        console.error(`Falha ao enviar WhatsApp para ${contact.name}:`, err);
+        console.error(`Falha ao enviar WhatsApp para ${contatoPrioritario.name}:`, err);
+      }
+
+      // Tenta ligar múltiplas vezes para o contato prioritário
+      for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_POR_CONTATO; tentativa++) {
+        if (callAnswered) break;
+
+        try {
+          console.log(`📞 Tentativa ${tentativa}/${MAX_TENTATIVAS_POR_CONTATO} - Ligando para ${contatoPrioritario.name} (prioritário)...`);
+          
+          // Faz a chamada
+          const call = await this.twilioService.makeFallAlertCall(contatoPrioritario.phone, patient.name);
+          
+          console.log(`📱 Chamada iniciada para ${contatoPrioritario.name}. SID: ${call.sid}`);
+          console.log(`📞 Status imediato após criação: ${call.status}`);
+          
+          // Aguarda um pouco para a chamada iniciar
+          console.log('⏳ Aguardando 5 segundos para a chamada iniciar...');
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          // Monitoramento contínuo da chamada
+          let callRecord = await this.twilioService.client.calls(call.sid).fetch();
+          console.log(`📞 Status inicial da chamada para ${contatoPrioritario.name}: ${callRecord.status}`);
+          
+          let tempoDecorrido = 5000; // Já aguardamos 5 segundos
+          const intervaloVerificacao = 15000; // Verifica a cada 15 segundos
+          const tempoMaximoEspera = TEMPO_ESPERA_POR_TENTATIVA_MS;
+          let chamadaFinalizada = false;
+          
+          console.log(`🔄 Iniciando monitoramento da chamada (verificando a cada ${intervaloVerificacao/1000}s por até ${tempoMaximoEspera/1000}s)`);
+          
+          // Loop para verificar periodicamente o status da chamada
+          while (tempoDecorrido < tempoMaximoEspera && !chamadaFinalizada) {
+            // Aguarda o intervalo de verificação
+            console.log(`⏰ Aguardando ${intervaloVerificacao/1000} segundos antes da próxima verificação...`);
+            await new Promise(resolve => setTimeout(resolve, intervaloVerificacao));
+            tempoDecorrido += intervaloVerificacao;
+            
+            // Verifica o status atual
+            try {
+              callRecord = await this.twilioService.client.calls(call.sid).fetch();
+              console.log(`📞 [${tempoDecorrido / 1000}s] Status da chamada para ${contatoPrioritario.name}: ${callRecord.status}`);
+              
+              // Se a chamada foi atendida ou falhou/terminou, encerra o loop
+              if (callRecord.status === 'completed' || 
+                  callRecord.status === 'in-progress' || 
+                  callRecord.status === 'failed' ||
+                  callRecord.status === 'busy' ||
+                  callRecord.status === 'no-answer' ||
+                  callRecord.status === 'canceled') {
+                chamadaFinalizada = true;
+                console.log(`✅ Chamada finalizada para ${contatoPrioritario.name} com status: ${callRecord.status} após ${tempoDecorrido/1000}s`);
+              } else {
+                console.log(`🔄 Chamada ainda com status '${callRecord.status}', continuando monitoramento...`);
+              }
+            } catch (error) {
+              console.error(`❌ Erro ao verificar status da chamada: ${error.message}`);
+              // Se houver erro, considera a chamada como finalizada
+              chamadaFinalizada = true;
+            }
+          }
+          
+          // Se o tempo máximo foi atingido sem um status conclusivo, verifica uma última vez
+          if (!chamadaFinalizada) {
+            try {
+              callRecord = await this.twilioService.client.calls(call.sid).fetch();
+              console.log(`⏰ Tempo máximo atingido (${tempoMaximoEspera/1000}s). Status final da chamada para ${contatoPrioritario.name}: ${callRecord.status}`);
+            } catch (error) {
+              console.error(`❌ Erro na verificação final: ${error.message}`);
+            }
+          }
+
+          // Verifica se a chamada foi atendida
+          // 'completed' = chamada foi atendida e finalizada 
+          // 'in-progress' = chamada foi atendida e ainda está em andamento
+          if (callRecord.status === 'completed' || callRecord.status === 'in-progress') {
+            console.log(`🎉 CHAMADA ATENDIDA por ${contatoPrioritario.name} na tentativa ${tentativa}! Status: ${callRecord.status}`);
+            callAnswered = true;
+
+            // Verifica o status atual do alerta para ver se já foi resolvido pelo app
+            const currentAlert = await this.prismaService.fallAlert.findUnique({
+              where: { id: alertId },
+            });
+
+            // Se o alerta ainda estiver pendente, marca como RESOLVED
+            if (currentAlert && currentAlert.status === 'PENDING') {
+              await this.prismaService.fallAlert.update({
+                where: { id: alertId },
+                data: { 
+                  status: 'RESOLVED',
+                  confirmedByContactId: contatoPrioritario.id,
+                  respondedAt: new Date()
+                },
+              });
+
+              console.log(`✅ Alerta ${alertId} marcado como RESOLVED porque ${contatoPrioritario.name} atendeu à chamada.`);
+
+              // Emite evento para o WebSocket
+              this.gateway.emitAlertStatusChange({
+                id: alertId,
+                patientId: currentAlert.patientId,
+                status: 'RESOLVED',
+                respondedBy: contatoPrioritario.id,
+              });
+              
+              // Cancela todos os jobs relacionados a este alerta (auto confirmação e notificação de contatos secundários)
+              const jobs = await this.alertsQueue.getJobs(['delayed']);
+              for (const job of jobs) {
+                if (job.data.alertId === alertId) {
+                  console.log(`Cancelando job ${job.id} (${job.name}) relacionado ao alerta ${alertId} porque foi resolvido por chamada`);
+                  await job.remove();
+                }
+              }
+              
+              // Notifica outros contatos de emergência que o alerta foi resolvido pelo contato prioritário
+              if (contatosSecundarios.length > 0) {
+                for (const secundario of contatosSecundarios) {
+                  await this.twilioService.sendAlertResolvedWhatsApp(secundario.phone, {
+                    patientName: patient.name,
+                    responderName: `${contatoPrioritario.name} (contato prioritário)`,
+                    resolvedByCall: true
+                  });
+                }
+              }
+            }
+
+            // Envia confirmação por WhatsApp
+            await this.twilioService.sendCallAnsweredConfirmationWhatsApp(contatoPrioritario.phone, {
+              contactName: contatoPrioritario.name,
+              patientName: patient.name
+            });
+            break; // Sai do loop de tentativas
+          } else {
+            console.log(`❌ Tentativa ${tentativa} - Chamada não atendida pelo contato prioritário (status: ${callRecord.status})`);
+            
+            // Se não foi a última tentativa, aguarda um intervalo antes de tentar novamente
+            if (tentativa < MAX_TENTATIVAS_POR_CONTATO) {
+              console.log(`⏳ Aguardando ${INTERVALO_ENTRE_TENTATIVAS_MS / 1000}s antes da próxima tentativa...`);
+              await new Promise(resolve => setTimeout(resolve, INTERVALO_ENTRE_TENTATIVAS_MS));
+            } else {
+              console.log(`⚠️ ${contatoPrioritario.name} (contato prioritário) não atendeu após ${MAX_TENTATIVAS_POR_CONTATO} tentativas.`);
+            }
+          }
+        } catch (err) {
+          console.error(`❌ Erro na tentativa ${tentativa} para ${contatoPrioritario.name}:`, err);
+          
+          // Se não for a última tentativa e houve erro, tenta novamente após intervalo
+          if (tentativa < MAX_TENTATIVAS_POR_CONTATO) {
+            await new Promise(resolve => setTimeout(resolve, INTERVALO_ENTRE_TENTATIVAS_MS));
+          }
+        }
       }
     }
+    
+    // Se o contato prioritário não atendeu, continua com os secundários
+    if (!callAnswered && contatosSecundarios.length > 0) {
+      console.log(`\n➡️ Contato prioritário não atendeu. Tentando contatos secundários...`);
+      
+      // Envia mensagem para todos os contatos secundários
+      for (const contact of contatosSecundarios) {
+        try {
+          const message = `🚨 EMERGÊNCIA - Queda Confirmada
 
-    // Lógica de ligação com prioridade
-    let callAnswered = false;
-    for (const contact of contatos) {
-      if (callAnswered) break;
+Olá, ${contact.name}!
 
-      try {
-        console.log(`Tentando ligar para ${contact.name} (prioridade ${contact.priority})...`);
-        const call = await this.twilioService.makeFallAlertCall(contact.phone, patient.name);
+*${patient.name}* sofreu uma queda e precisa de ajuda URGENTE! O contato prioritário não atendeu.
 
-        await new Promise(resolve => setTimeout(resolve, 20000));
+📍 Última localização conhecida:
+${googleMapsLink}
 
-        const callRecord = await this.twilioService.client.calls(call.sid).fetch();
+⚠️ Por favor:
+• Vá verificar o mais rápido possível
+• Ligue para emergência se necessário (192/193)
+• Avise outros familiares
 
-        if (callRecord.status === 'completed') {
-          console.log(`Chamada atendida por ${contact.name}.`);
-          callAnswered = true;
-        } else {
-          console.log(`Chamada para ${contact.name} não atendida (status: ${callRecord.status}).`);
+Cada segundo conta! 🙏
+
+(Contato de prioridade ${contact.priority})`;
+
+          await this.twilioService.sendWhatsAppMessage(contact.phone, message);
+        } catch (err) {
+          console.error(`Falha ao enviar WhatsApp para ${contact.name}:`, err);
         }
-      } catch (err) {
-        console.error(`Falha ao ligar para ${contact.name}:`, err);
+      }
+      
+      // Tenta ligar para cada contato secundário
+      for (const contact of contatosSecundarios) {
+        if (callAnswered) break;
+  
+        console.log(`\n🔄 Iniciando tentativas com ${contact.name} (prioridade ${contact.priority})...`);
+  
+        // Tenta ligar múltiplas vezes para o mesmo contato
+        for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_POR_CONTATO; tentativa++) {
+          if (callAnswered) break;
+  
+          try {
+            console.log(`📞 Tentativa ${tentativa}/${MAX_TENTATIVAS_POR_CONTATO} - Ligando para ${contact.name}...`);
+            
+            // Faz a chamada
+            const call = await this.twilioService.makeFallAlertCall(contact.phone, patient.name);
+            
+            console.log(`📱 Chamada iniciada para ${contact.name}. SID: ${call.sid}`);
+            console.log(`📞 Status imediato após criação: ${call.status}`);
+            
+            // Aguarda um pouco para a chamada iniciar
+            console.log('⏳ Aguardando 5 segundos para a chamada iniciar...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            
+            // Monitoramento contínuo da chamada
+            let callRecord = await this.twilioService.client.calls(call.sid).fetch();
+            console.log(`📞 Status inicial da chamada para ${contact.name}: ${callRecord.status}`);
+            
+            let tempoDecorrido = 5000; // Já aguardamos 5 segundos
+            const intervaloVerificacao = 15000; // Verifica a cada 15 segundos
+            const tempoMaximoEspera = TEMPO_ESPERA_POR_TENTATIVA_MS;
+            let chamadaFinalizada = false;
+            
+            console.log(`🔄 Iniciando monitoramento da chamada (verificando a cada ${intervaloVerificacao/1000}s por até ${tempoMaximoEspera/1000}s)`);
+            
+            // Loop para verificar periodicamente o status da chamada
+            while (tempoDecorrido < tempoMaximoEspera && !chamadaFinalizada) {
+              // Aguarda o intervalo de verificação
+              console.log(`⏰ Aguardando ${intervaloVerificacao/1000} segundos antes da próxima verificação...`);
+              await new Promise(resolve => setTimeout(resolve, intervaloVerificacao));
+              tempoDecorrido += intervaloVerificacao;
+              
+              // Verifica o status atual
+              try {
+                callRecord = await this.twilioService.client.calls(call.sid).fetch();
+                console.log(`📞 [${tempoDecorrido / 1000}s] Status da chamada para ${contact.name}: ${callRecord.status}`);
+                
+                // Se a chamada foi atendida ou falhou/terminou, encerra o loop
+                if (callRecord.status === 'completed' || 
+                    callRecord.status === 'in-progress' || 
+                    callRecord.status === 'failed' ||
+                    callRecord.status === 'busy' ||
+                    callRecord.status === 'no-answer' ||
+                    callRecord.status === 'canceled') {
+                  chamadaFinalizada = true;
+                  console.log(`✅ Chamada finalizada para ${contact.name} com status: ${callRecord.status} após ${tempoDecorrido/1000}s`);
+                } else {
+                  console.log(`🔄 Chamada ainda com status '${callRecord.status}', continuando monitoramento...`);
+                }
+              } catch (error) {
+                console.error(`❌ Erro ao verificar status da chamada: ${error.message}`);
+                // Se houver erro, considera a chamada como finalizada
+                chamadaFinalizada = true;
+              }
+            }
+            
+            // Se o tempo máximo foi atingido sem um status conclusivo, verifica uma última vez
+            if (!chamadaFinalizada) {
+              try {
+                callRecord = await this.twilioService.client.calls(call.sid).fetch();
+                console.log(`⏰ Tempo máximo atingido (${tempoMaximoEspera/1000}s). Status final da chamada para ${contact.name}: ${callRecord.status}`);
+              } catch (error) {
+                console.error(`❌ Erro na verificação final: ${error.message}`);
+              }
+            }
+  
+            // Verifica se a chamada foi atendida
+            // 'completed' = chamada foi atendida e finalizada 
+            // 'in-progress' = chamada foi atendida e ainda está em andamento
+            if (callRecord.status === 'completed' || callRecord.status === 'in-progress') {
+              console.log(`🎉 CHAMADA ATENDIDA por ${contact.name} na tentativa ${tentativa}! Status: ${callRecord.status}`);
+              callAnswered = true;
+  
+              // Verifica o status atual do alerta para ver se já foi resolvido pelo app
+              const currentAlert = await this.prismaService.fallAlert.findUnique({
+                where: { id: alertId },
+              });
+
+              // Se o alerta ainda estiver pendente, marca como RESOLVED
+              if (currentAlert && currentAlert.status === 'PENDING') {
+                await this.prismaService.fallAlert.update({
+                  where: { id: alertId },
+                  data: { 
+                    status: 'RESOLVED',
+                    confirmedByContactId: contact.id,
+                    respondedAt: new Date()
+                  },
+                });
+
+                console.log(`✅ Alerta ${alertId} marcado como RESOLVED porque ${contact.name} atendeu à chamada.`);
+
+                // Emite evento para o WebSocket
+                this.gateway.emitAlertStatusChange({
+                  id: alertId,
+                  patientId: currentAlert.patientId,
+                  status: 'RESOLVED',
+                  respondedBy: contact.id,
+                });
+                
+                // Cancela todos os jobs relacionados a este alerta (auto confirmação e notificação de contatos secundários)
+                const jobs = await this.alertsQueue.getJobs(['delayed']);
+                for (const job of jobs) {
+                  if (job.data.alertId === alertId) {
+                    console.log(`Cancelando job ${job.id} (${job.name}) relacionado ao alerta ${alertId} porque foi resolvido por chamada`);
+                    await job.remove();
+                  }
+                }
+                
+                // Notifica o contato prioritário e outros contatos secundários
+                for (const outroContato of contatos) {
+                  if (outroContato.id !== contact.id) { // Não notifica quem atendeu
+                    await this.twilioService.sendAlertResolvedWhatsApp(outroContato.phone, {
+                      patientName: patient.name,
+                      responderName: `${contact.name} (contato de prioridade ${contact.priority})`,
+                      resolvedByCall: true
+                    });
+                  }
+                }
+              }
+
+              // Envia confirmação por WhatsApp
+              await this.twilioService.sendCallAnsweredConfirmationWhatsApp(contact.phone, {
+                contactName: contact.name,
+                patientName: patient.name
+              });
+              break; // Sai do loop de tentativas
+            } else {
+              console.log(`❌ Tentativa ${tentativa} - Chamada não atendida (status: ${callRecord.status})`);
+              
+              // Se não foi a última tentativa, aguarda um intervalo antes de tentar novamente
+              if (tentativa < MAX_TENTATIVAS_POR_CONTATO) {
+                console.log(`⏳ Aguardando ${INTERVALO_ENTRE_TENTATIVAS_MS / 1000}s antes da próxima tentativa...`);
+                await new Promise(resolve => setTimeout(resolve, INTERVALO_ENTRE_TENTATIVAS_MS));
+              } else {
+                console.log(`⚠️ ${contact.name} não atendeu após ${MAX_TENTATIVAS_POR_CONTATO} tentativas. Passando para o próximo contato.`);
+              }
+            }
+          } catch (err) {
+            console.error(`❌ Erro na tentativa ${tentativa} para ${contact.name}:`, err);
+            
+            // Se não for a última tentativa e houve erro, tenta novamente após intervalo
+            if (tentativa < MAX_TENTATIVAS_POR_CONTATO) {
+              await new Promise(resolve => setTimeout(resolve, INTERVALO_ENTRE_TENTATIVAS_MS));
+            }
+          }
+        }
       }
     }
 
     if (!callAnswered) {
-      console.log('Nenhum contato de emergência atendeu à chamada.');
+      console.log('⚠️ Nenhum contato de emergência atendeu à chamada.');
+      
+      // Envia mensagem extra para todos
+      for (const contact of contatos) {
+        const message = `⚠️ ÚLTIMA TENTATIVA
+
+Não conseguimos contato telefônico com ninguém!
+
+Por favor, ${contact.name}, verifique *${patient.name}* URGENTEMENTE!
+
+📍 ${googleMapsLink}
+
+RESPONDA ESTA MENSAGEM quando chegar! 🙏`;
+
+        await this.twilioService.sendWhatsAppMessage(contact.phone, message);
+      }
     }
 
     // Atualiza status
