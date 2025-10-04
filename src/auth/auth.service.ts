@@ -12,7 +12,9 @@ export class AuthService {
 
   // auth.service.ts
     async validateUser(email: string, password: string) {
+      
       const user = await this.prisma.user.findUnique({ where: { email } });
+
       if (!user) return null;
 
       // impede login de paciente por e-mail
@@ -56,6 +58,4 @@ export class AuthService {
     }
   } 
   */
-
-
 }
