@@ -178,13 +178,13 @@ enum Role {
   CAREGIVER
 }
 
-// 🆕 Novos status de alerta
 enum FallStatus {
   PENDING        // Alerta criado, aguardando resposta do cuidador prioridade 1
   VERIFYING      // Cuidador indicou que está indo verificar
   FALSE_ALARM    // Cuidador marcou como falso alerta
   CONFIRMED      // Alerta confirmado (automaticamente ou manualmente)
   IGNORED        // Alerta ignorado/cancelado
+  RESOLVED       // Alerta resolvido (após atendimento)
 }
 
 enum ConfirmationMethod {
