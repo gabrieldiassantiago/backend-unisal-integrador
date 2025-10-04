@@ -20,7 +20,6 @@ import { TwilioModule } from './twilio/twillio.module';
     AuthModule,
     FallAlertsModule,
     EmergencyContactsModule,
-    WhatsappModule,
     CaregiverModule,
     PatientModule,
     TwilioModule, 
