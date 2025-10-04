@@ -1,3 +1,4 @@
+// fall-alerts.gateway.ts
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -15,9 +16,7 @@ import { Server, Socket } from 'socket.io';
   cors: { origin: '*' },
 })
 export class FallAlertsGateway
-
   implements OnGatewayConnection, OnGatewayDisconnect
-
 {
   @WebSocketServer() server: Server;
 
@@ -47,5 +46,19 @@ export class FallAlertsGateway
     this.server
       .to(`patient_${alert.patientId}`)
       .emit('alertConfirmed', alert);
+  }
+
+  // 🆕 Emitir mudança de status
+  emitAlertStatusChange(data: any) {
+    this.server
+      .to(`patient_${data.patientId}`)
+      .emit('alertStatusChanged', data);
+  }
+
+  // 🆕 Emitir pedido de confirmação
+  emitRequestConfirmation(data: any) {
+    this.server
+      .to(`patient_${data.patientId}`)
+      .emit('requestConfirmation', data);
   }
 }

@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InteliSensor - Pesquisa UX</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        body {
+            background: #ffffff;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        @keyframes scaleUp {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        
+        .animate-fade-in { animation: fadeIn 0.6s ease-out; }
+        .animate-slide-in { animation: slideIn 0.5s ease-out; }
+        .animate-scale-up { animation: scaleUp 0.4s ease-out; }
+        
+        .radio-option:hover {
+            transform: translateX(4px);
+            border-color: #2563eb;
+        }
+        
+        input[type="radio"]:checked + label {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+        
+        input[type="radio"] + label {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            cursor: pointer;
+            width: 100%;
+        }
+        
+        input[type="range"]::-webkit-slider-track {
+            background: #e5e7eb;
+            height: 6px;
+            border-radius: 10px;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            background: #2563eb;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            margin-top: -7px;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+            transition: all 0.2s;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5);
+        }
+        
+        .progress-bar {
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .btn-primary {
+            background: #2563eb;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(37, 99, 235, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            background: #e5e7eb;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-white">
+    
+    <div x-data="surveyApp()" class="min-h-screen">
+        
+        <!-- Header Fixo -->
+        <div class="bg-white border-b border-gray-100 sticky top-0 z-50 animate-fade-in">
+            <div class="container mx-auto px-6 py-4">
+                <div class="flex items-center justify-between max-w-2xl mx-auto">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold text-gray-900">InteliSensor</h1>
+                            <p class="text-xs text-gray-500">Pesquisa de UX</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm font-semibold text-blue-600" x-text="currentStep + '/' + totalSteps"></p>
+                        <p class="text-xs text-gray-500">questões</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Container Principal -->
+        <div class="container mx-auto px-6 py-12 max-w-2xl">
+            
+            <!-- Intro -->
+            <div x-show="currentStep === 0" class="animate-scale-up">
+                <div class="text-center mb-12">
+                    <div class="w-16 h-16 bg-blue-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-3xl font-bold text-gray-900 mb-4">Olá! 👋</h2>
+                    <p class="text-lg text-gray-600 leading-relaxed mb-6">
+                        Esta é uma pesquisa sobre um <strong>sistema de detecção de quedas</strong> para idosos. Mesmo que você não cuide de nenhum idoso atualmente, pedimos que responda imaginando estar nessa situação.
+                    </p>
+                    <div class="bg-blue-50 rounded-2xl p-6 mb-8 text-left">
+                        <p class="text-sm font-semibold text-gray-900 mb-3">📋 Contexto do Sistema:</p>
+                        <ul class="space-y-2 text-sm text-gray-700">
+                            <li class="flex gap-2">
+                                <span class="text-blue-600">•</span>
+                                <span>Um sensor vestível detecta quando o idoso cai</span>
+                            </li>
+                            <li class="flex gap-2">
+                                <span class="text-blue-600">•</span>
+                                <span>Você recebe um alerta instantâneo no celular</span>
+                            </li>
+                            <li class="flex gap-2">
+                                <span class="text-blue-600">•</span>
+                                <span>O sistema mostra a localização GPS da pessoa</span>
+                            </li>
+                            <li class="flex gap-2">
+                                <span class="text-blue-600">•</span>
+                                <span>Pode notificar outros familiares se necessário</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-8">⏱️ Tempo estimado: 3-4 minutos</p>
+                    <button @click="nextStep" class="btn-primary text-white px-8 py-4 rounded-xl font-semibold text-lg">
+                        Começar Pesquisa
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div x-show="currentStep > 0 && currentStep <= totalSteps" class="mb-8 animate-fade-in">
+                <div class="w-full bg-gray-100 rounded-full h-2">
+                    <div class="progress-bar bg-blue-600 h-2 rounded-full" :style="'width: ' + progress + '%'"></div>
+                </div>
+            </div>
+
+            <!-- Formulário -->
+            <form @submit.prevent="submitForm">
+                
+                <!-- Q1: Tempo de Resposta Inicial -->
+                <div x-show="currentStep === 1" class="animate-scale-up">
+                    <div class="mb-8">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Tempo de Reação</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            Imagine: você está cuidando de um idoso e recebe um alerta de possível queda no celular. 
+                            <strong>Quanto tempo você acha razoável ter para visualizar e responder ao alerta?</strong>
+                        </p>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-2xl p-6 mb-6">
+                        <div class="flex justify-between text-sm text-gray-600 mb-4">
+                            <span>Muito rápido</span>
+                            <span>Mais tempo</span>
+                        </div>
+                        <input type="range" x-model="answers.responseTime" min="15" max="120" step="15" class="w-full mb-4">
+                        <div class="text-center">
+                            <div class="text-4xl font-bold text-blue-600 mb-2" x-text="answers.responseTime + 's'"></div>
+                            <p class="text-sm text-gray-600" x-text="getTimeLabel(answers.responseTime)"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-blue-50 border-l-4 border-blue-600 rounded-r-xl p-4">
+                        <p class="text-sm text-gray-700">
+                            <strong>Por exemplo:</strong> 30s significa que se você não responder em meio minuto, o sistema já escalaria o alerta.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Q2: Primeira Reação -->
+                <div x-show="currentStep === 2" class="animate-scale-up">
+                    <div class="mb-8">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Sua Primeira Reação</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            Você recebe o alerta no celular. <strong>O que seria mais útil para você fazer nesse momento?</strong>
+                        </p>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <template x-for="opt in firstReactionOptions" :key="opt.value">
+                            <div>
+                                <input type="radio" :id="'react-'+opt.value" :value="opt.value" x-model="answers.firstReaction" class="hidden">
+                                <label :for="'react-'+opt.value" class="radio-option block p-5 border-2 border-gray-200 rounded-xl cursor-pointer">
+                                    <div class="font-semibold text-gray-900 mb-1" x-text="opt.label"></div>
+                                    <div class="text-sm text-gray-600" x-text="opt.desc"></div>
+                                </label>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Q3: Tempo de Verificação -->
+                <div x-show="currentStep === 3" class="animate-scale-up">
+                    <div class="mb-8">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Tempo para Verificar</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            Você clica em <span class="px-3 py-1 bg-yellow-100 text-yellow-900 rounded-lg font-semibold">"Vou Verificar"</span>. 
+                            <strong>Quanto tempo você precisaria para chegar até a pessoa e confirmar se está tudo bem?</strong>
+                        </p>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <template x-for="opt in verifyTimeOptions" :key="opt.value">
+                            <div>
+                                <input type="radio" :id="'verify-'+opt.value" :value="opt.value" x-model="answers.verifyTime" class="hidden">
+                                <label :for="'verify-'+opt.value" class="radio-option block p-5 border-2 border-gray-200 rounded-xl cursor-pointer">
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <div class="font-bold text-lg text-gray-900 mb-1" x-text="opt.time"></div>
+                                            <div class="text-sm text-gray-600" x-text="opt.scenario"></div>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <div class="mt-6 bg-blue-50 border-l-4 border-blue-600 rounded-r-xl p-4">
+                        <p class="text-sm text-gray-700">
+                            <strong>Lembre-se:</strong> Se você não confirmar nesse tempo, o sistema enviará o alerta para outros contatos.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Q4: Notificações Preferidas -->
+                <div x-show="currentStep === 4" class="animate-scale-up">
+                    <div class="mb-8">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Como Prefere Ser Avisado?</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            <strong>De que formas você gostaria de receber o alerta de queda?</strong> Pode marcar mais de uma opção.
+                        </p>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <template x-for="ch in channels" :key="ch.value">
+                            <div>
+                                <input type="checkbox" :id="'ch-'+ch.value" :value="ch.value" x-model="answers.channels" class="hidden">
+                                <label :for="'ch-'+ch.value" 
+                                       class="radio-option block p-5 border-2 border-gray-200 rounded-xl cursor-pointer"
+                                       :class="answers.channels.includes(ch.value) ? 'border-blue-600 bg-blue-600 text-white' : ''">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-semibold mb-1" x-text="ch.label"></div>
+                                            <div class="text-sm opacity-80" x-text="ch.desc"></div>
+                                        </div>
+                                        <svg x-show="answers.channels.includes(ch.value)" class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    </div>
+                                </label>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Q5: Ligações Automáticas -->
+                <div x-show="currentStep === 5" class="animate-scale-up">
+                    <div class="mb-8">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Ligações Automáticas</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            Se ninguém responder ao alerta no tempo limite, <strong>o sistema deveria fazer ligações telefônicas automáticas para os contatos?</strong>
+                        </p>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <template x-for="opt in callOptions" :key="opt.value">
+                            <div>
+                                <input type="radio" :id="'call-'+opt.value" :value="opt.value" x-model="answers.calls" class="hidden">
+                                <label :for="'call-'+opt.value" class="radio-option block p-5 border-2 border-gray-200 rounded-xl cursor-pointer">
+                                    <div class="font-semibold text-gray-900 mb-1" x-text="opt.label"></div>
+                                    <div class="text-sm text-gray-600" x-text="opt.desc"></div>
+                                </label>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Q6: Prioridade de Contatos -->
+                <div x-show="currentStep === 6" class="animate-scale-up">
+                    <div class="mb-8">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Ordem de Notificação</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            Se você (cuidador principal) não responder, <strong>como o sistema deve avisar os outros contatos de emergência?</strong>
+                        </p>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <template x-for="opt in escalationOptions" :key="opt.value">
+                            <div>
+                                <input type="radio" :id="'esc-'+opt.value" :value="opt.value" x-model="answers.escalation" class="hidden">
+                                <label :for="'esc-'+opt.value" class="radio-option block p-5 border-2 border-gray-200 rounded-xl cursor-pointer">
+                                    <div class="font-semibold text-gray-900 mb-2" x-text="opt.label"></div>
+                                    <div class="text-sm text-gray-600 mb-3" x-text="opt.desc"></div>
+                                    <div class="text-xs bg-gray-100 rounded-lg p-3 text-gray-700" x-text="opt.example"></div>
+                                </label>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Q7: Preocupações -->
+                <div x-show="currentStep === 7" class="animate-scale-up">
+                    <div class="mb-8">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Suas Preocupações</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            <strong>Qual seria sua maior preocupação ao usar um sistema assim?</strong>
+                        </p>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <template x-for="opt in concernOptions" :key="opt.value">
+                            <div>
+                                <input type="radio" :id="'concern-'+opt.value" :value="opt.value" x-model="answers.concern" class="hidden">
+                                <label :for="'concern-'+opt.value" class="radio-option block p-5 border-2 border-gray-200 rounded-xl cursor-pointer">
+                                    <div class="font-semibold text-gray-900" x-text="opt.label"></div>
+                                </label>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Q8: Probabilidade de Uso -->
+                <div x-show="currentStep === 8" class="animate-scale-up">
+                    <div class="mb-8">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Interesse no Sistema</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            Se você tivesse um familiar idoso, <strong>qual a probabilidade de você usar/recomendar este sistema?</strong>
+                        </p>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-2xl p-8">
+                        <div class="flex justify-between text-sm text-gray-600 mb-4">
+                            <span>Nenhuma</span>
+                            <span>Total</span>
+                        </div>
+                        <input type="range" x-model="answers.interest" min="0" max="10" step="1" class="w-full mb-6">
+                        <div class="text-center">
+                            <div class="text-5xl font-bold text-blue-600 mb-2" x-text="answers.interest + '/10'"></div>
+                            <p class="text-sm text-gray-600" x-text="getInterestLabel(answers.interest)"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q9: Sugestões -->
+                <div x-show="currentStep === 9" class="animate-scale-up">
+                    <div class="mb-8">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-3">Sua Opinião Importa</h3>
+                        <p class="text-gray-600 leading-relaxed">
+                            <strong>Tem alguma sugestão, dúvida ou comentário sobre o sistema?</strong> (Opcional)
+                        </p>
+                    </div>
+                    
+                    <textarea 
+                        x-model="answers.comments" 
+                        rows="6" 
+                        class="w-full p-5 border-2 border-gray-200 rounded-xl focus:border-blue-600 focus:outline-none transition-colors resize-none text-gray-700"
+                        placeholder="Ex: Seria interessante ter um histórico das quedas detectadas nos últimos meses..."></textarea>
+                </div>
+
+                <!-- Sucesso -->
+                <div x-show="submitted" x-cloak class="animate-scale-up text-center py-12">
+                    <div class="w-20 h-20 bg-green-600 rounded-full mx-auto mb-6 flex items-center justify-center">
+                        <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-3xl font-bold text-gray-900 mb-4">Muito Obrigado! 🎉</h2>
+                    <p class="text-lg text-gray-600 mb-8 max-w-md mx-auto">
+                        Suas respostas foram registradas e vão ajudar muito no desenvolvimento do InteliSensor.
+                    </p>
+                    <button @click="resetForm" class="btn-primary text-white px-6 py-3 rounded-xl font-semibold">
+                        Fazer Nova Resposta
+                    </button>
+                </div>
+
+                <!-- Navegação -->
+                <div x-show="currentStep > 0 && currentStep <= totalSteps && !submitted" class="flex justify-between items-center mt-12 pt-8 border-t border-gray-100">
+                    <button type="button" @click="prevStep" x-show="currentStep > 1"
+                            class="px-6 py-3 text-gray-600 hover:text-gray-900 font-semibold rounded-xl hover:bg-gray-50 transition-all">
+                        ← Voltar
+                    </button>
+                    
+                    <div class="flex gap-3 ml-auto">
+                        <button type="button" @click="nextStep" x-show="currentStep < totalSteps"
+                                :disabled="!canProceed"
+                                class="btn-primary text-white px-8 py-3 rounded-xl font-semibold">
+                            Próxima →
+                        </button>
+                        
+                        <button type="submit" x-show="currentStep === totalSteps"
+                                :disabled="!canSubmit"
+                                class="btn-primary text-white px-8 py-3 rounded-xl font-semibold">
+                            Enviar Respostas
+                        </button>
+                    </div>
+                </div>
+
+            </form>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="border-t border-gray-100 mt-16 py-8">
+            <div class="container mx-auto px-6 text-center text-sm text-gray-500">
+                <p>© 2025 InteliSensor - Sistema IoT de Detecção de Quedas</p>
+                <p class="mt-1 text-xs">Projeto Integrador - Engenharia da Computação</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function surveyApp() {
+            return {
+                currentStep: 0,
+                totalSteps: 9,
+                submitted: false,
+                answers: {
+                    responseTime: 30,
+                    firstReaction: '',
+                    verifyTime: '',
+                    channels: [],
+                    calls: '',
+                    escalation: '',
+                    concern: '',
+                    interest: 5,
+                    comments: ''
+                },
+                
+                firstReactionOptions: [
+                    { value: 'cancel', label: 'Cancelar o alerta ("Falso alarme")', desc: 'Se eu souber que a pessoa está bem' },
+                    { value: 'verify', label: 'Clicar em "Vou verificar"', desc: 'Para ir até a pessoa e checar' },
+                    { value: 'confirm', label: 'Confirmar emergência imediatamente', desc: 'Para avisar todos os contatos agora' },
+                    { value: 'call', label: 'Ligar para a pessoa primeiro', desc: 'Para confirmar se precisa de ajuda' }
+                ],
+                
+                verifyTimeOptions: [
+                    { value: '1min', time: '1 minuto', scenario: 'Mesma casa, cômodo próximo' },
+                    { value: '2min', time: '2 minutos', scenario: 'Mesma casa, outro andar' },
+                    { value: '3min', time: '3 minutos', scenario: 'Tempo mais confortável' },
+                    { value: '5min', time: '5 minutos', scenario: 'Situações mais complexas' }
+                ],
+                
+                channels: [
+                    { value: 'app', label: 'Notificação no App', desc: 'Push notification com som' },
+                    { value: 'whatsapp', label: 'WhatsApp', desc: 'Mensagem com localização GPS' },
+                    { value: 'call', label: 'Ligação telefônica', desc: 'Chamada de voz automática' },
+                    { value: 'sms', label: 'SMS', desc: 'Mensagem de texto' }
+                ],
+                
+                callOptions: [
+                    { value: 'always', label: 'Sim, sempre ligar automaticamente', desc: 'Máxima segurança em qualquer situação' },
+                    { value: 'night', label: 'Sim, mas só à noite (22h-7h)', desc: 'Ligação apenas em horários críticos' },
+                    { value: 'no', label: 'Não, só mensagens são suficientes', desc: 'Prefiro apenas WhatsApp e notificações' },
+                    { value: 'configurable', label: 'Deixar configurável', desc: 'Poder ativar/desativar quando quiser' }
+                ],
+                
+                escalationOptions: [
+                    { value: 'sequential', label: 'Um por vez (sequencial)', desc: 'Envia para o próximo contato apenas se o anterior não responder', example: 'Ex: Avisa filho → espera 1min → se não responder, avisa neto → espera 1min → avisa vizinho' },
+                    { value: 'simultaneous', label: 'Todos ao mesmo tempo', desc: 'Envia para todos os contatos de emergência simultaneamente', example: 'Ex: Filho, neto e vizinho recebem o alerta ao mesmo tempo' },
+                    { value: 'groups', label: 'Por grupos de prioridade', desc: 'Envia para um grupo, espera resposta, depois envia para o próximo grupo', example: 'Ex: Grupo 1 (familiares) → espera 2min → Grupo 2 (vizinhos e amigos)' }
+                ],
+                
+                concernOptions: [
+                    { value: 'false_alarms', label: 'Receber muitos alarmes falsos (irritante)' },
+                    { value: 'miss_real', label: 'Não detectar uma queda real (perigoso)' },
+                    { value: 'privacy', label: 'Privacidade do idoso (monitoramento constante)' },
+                    { value: 'complexity', label: 'Sistema ser difícil de usar no dia a dia' },
+                    { value: 'battery', label: 'Bateria do dispositivo acabar na hora errada' },
+                    { value: 'cost', label: 'Custo de mensalidade ou manutenção' }
+                ],
+                
+                get progress() {
+                    return currentStep === 0 ? 0 : (this.currentStep / this.totalSteps) * 100;
+                },
+                
+                get canProceed() {
+                    switch(this.currentStep) {
+                        case 1: return this.answers.responseTime > 0;
+                        case 2: return this.answers.firstReaction !== '';
+                        case 3: return this.answers.verifyTime !== '';
+                        case 4: return this.answers.channels.length > 0;
+                        case 5: return this.answers.calls !== '';
+                        case 6: return this.answers.escalation !== '';
+                        case 7: return this.answers.concern !== '';
+                        case 8: return true;
+                        case 9: return true;
+                        default: return true;
+                    }
+                },
+                
+                get canSubmit() {
+                    return this.answers.firstReaction !== '' && 
+                           this.answers.verifyTime !== '' &&
+                           this.answers.channels.length > 0 &&
+                           this.answers.calls !== '' &&
+                           this.answers.escalation !== '' &&
+                           this.answers.concern !== '';
+                },
+                
+                getTimeLabel(time) {
+                    if (time <= 30) return 'Resposta muito rápida - Máxima urgência';
+                    if (time <= 60) return 'Tempo razoável - Equilibrado';
+                    if (time <= 90) return 'Tempo confortável - Mais flexível';
+                    return 'Tempo estendido - Bastante margem';
+                },
+                
+                getInterestLabel(val) {
+                    if (val <= 3) return 'Pouco interessado';
+                    if (val <= 5) return 'Neutro / Talvez';
+                    if (val <= 7) return 'Interessado';
+                    if (val <= 9) return 'Muito interessado';
+                    return 'Extremamente interessado!';
+                },
+                
+                nextStep() {
+                    if (this.currentStep === 0 || this.canProceed) {
+                        if (this.currentStep < this.totalSteps) {
+                            this.currentStep++;
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                    }
+                },
+                
+                prevStep() {
+                    if (this.currentStep > 1) {
+                        this.currentStep--;
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                },
+                
+                submitForm() {
+                    if (this.canSubmit) {
+                        console.log('📊 Respostas:', this.answers);
+                        
+                        // Aqui você enviaria para API
+                        // fetch('https://seu-backend.com/api/survey', {
+                        //     method: 'POST',
+                        //     headers: { 'Content-Type': 'application/json' },
+                        //     body: JSON.stringify(this.answers)
+                        // });
+                        
+                        this.submitted = true;
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                },
+                
+                resetForm() {
+                    this.currentStep = 0;
+                    this.submitted = false;
+                    this.answers = {
+                        responseTime: 30,
+                        firstReaction: '',
+                        verifyTime: '',
+                        channels: [],
+                        calls: '',
+                        escalation: '',
+                        concern: '',
+                        interest: 5,
+                        comments: ''
+                    };
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { PrismaService } from '../../src/prisma/prisma.service';
-import { CreateUserDto } from './dtos/create-user.dto';
+import { ExistingEmailError } from '@src/errors/existingUserError';
 import * as bcrypt from 'bcrypt';
-import { ExistingEmailError } from '../../src/errors/existingUserError';
+import { CreateUserDto } from './dtos/create-user.dto';
+import { PrismaService } from '@src/prisma/prisma.service';
 
 @Injectable()
 export class UsersService {
@@ -15,7 +15,7 @@ export class UsersService {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     
     if (existing) {
-      throw new ExistingEmailError(`Usuário com o email ${email} já existe`);
+      throw new ConflictException(`Usuário com o email ${email} já existe`);
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
@@ -37,7 +37,6 @@ export class UsersService {
 
 
   async getAllUsers() {
-    // Se ficar pesado, troque por selects específicos ou paginação
     return this.prisma.user.findMany({
       include: {
         devices: true,
@@ -50,7 +49,8 @@ export class UsersService {
   }
 
   async getUserProfile(id: string) {
-    return this.prisma.user.findUnique({
+    // Primeiro buscamos o usuário com relações aninhadas
+    const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
         id: true,
@@ -59,16 +59,61 @@ export class UsersService {
         role: true,
         hasAccount: true,
         createdAt: true,
+        // fall alerts diretamente ligados ao user (se existir relação direta)
+        fallAlerts: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            deviceId: true,
+            patientId: true,
+            status: true,
+            latitude: true,
+            longitude: true,
+            createdAt: true,
+            confirmedAt: true,
+            location: true,
+            confirmedByContactId: true,
+            confirmationMethod: true,
+          },
+        },
         devices: true,
-        fallAlerts: true,
         contacts: true,
         patients: {
           select: {
-            id: true,
-            patient: true
-          }
-        }
+            id: true, // id da relação pivot (ex: caregiverPatient)
+            patient: {
+              select: {
+                id: true,
+                name: true,
+                birthDate: true,
+                gender: true,
+                hasAccount: true,
+                _count: {
+                  select: { fallAlerts: true },
+                },
+                fallAlerts: {
+                  orderBy: { createdAt: 'desc' },
+                  select: {
+                    id: true,
+                    deviceId: true,
+                    patientId: true,
+                    status: true,
+                    latitude: true,
+                    longitude: true,
+                    createdAt: true,
+                    confirmedAt: true,
+                    location: true,
+                    confirmedByContactId: true,
+                    confirmationMethod: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
+
+    return user;
   }
 }

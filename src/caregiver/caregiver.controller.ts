@@ -1,11 +1,10 @@
-import { 
-  Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards 
-} from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiUnauthorizedResponse, ApiForbiddenResponse } from '@nestjs/swagger';
-import { CaregiverService } from './caregiver.service';
-import { CreatePatientDto } from './dto/create-patient.dto';
+// caregiver/caregiver.controller.ts
+import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@src/auth/jwt-auth.guard';
 import { CurrentUserId } from '@src/common/decorators/current-user-id.decorator';
+import { CaregiverService } from './caregiver.service';
+import { CreatePatientAndPairDto } from './dto/create-patient.dto';
 
 @ApiTags('Caregiver')
 @ApiBearerAuth()
@@ -14,40 +13,24 @@ import { CurrentUserId } from '@src/common/decorators/current-user-id.decorator'
 export class CaregiverController {
   constructor(private svc: CaregiverService) {}
 
-  @Post('patients')
-  @ApiOperation({ summary: 'Criar paciente e gerar código de login' })
-  @ApiResponse({ status: 201, description: 'Paciente criado com sucesso e código gerado' })
-  @ApiUnauthorizedResponse({ description: 'Token ausente ou inválido' })
-  @ApiForbiddenResponse({ description: 'Apenas cuidadores podem acessar' })
-  @ApiBody({ type: CreatePatientDto })
-  createPatient(@CurrentUserId() userId: string, @Body() dto: CreatePatientDto) {
-    return this.svc.createPatientAndCode(
-      userId,
-      dto.name,
-      dto.age,
-      dto.ttlMinutes,
-      dto.emergencyContactPhone,
-      dto.emergencyContactName,
-    );
-  }
-
-  @Post('patients/:patientId/access-code')
-  @ApiOperation({ summary: 'Gerar novo código de login para paciente existente' })
-  @ApiParam({ name: 'patientId', type: String, format: 'uuid' })
-  @ApiBody({ schema: { example: { ttlMinutes: 120 } } })
-  @ApiResponse({ status: 201, description: 'Código gerado com sucesso' })
-  generateNewCode(
+  @Post('patients/with-device')
+  @ApiOperation({ summary: 'Criar paciente e parear dispositivo' })
+  @ApiResponse({ status: 201, description: 'Tudo criado em transação única' })
+  createPatientAndPair(
     @CurrentUserId() userId: string,
-    @Param('patientId', new ParseUUIDPipe()) patientId: string,
-    @Body('ttlMinutes') ttlMinutes?: number,
+    @Body() dto: CreatePatientAndPairDto,
   ) {
-    return this.svc.generateAccessCodeForPatient(userId, patientId, ttlMinutes);
+    return this.svc.createPatientPairDeviceAndLoginCode(userId, dto);
   }
 
-  @Get('patients')
-  @ApiOperation({ summary: 'Listar pacientes do cuidador' })
-  @ApiResponse({ status: 200, description: 'Lista de pacientes vinculados ao cuidador' })
-  list(@CurrentUserId() userId: string) {
-    return this.svc.myPatients(userId);
+  @Post('patients/:patientId/renew-code')
+  @ApiOperation({ summary: 'Gerar novo código de login para paciente já cadastrado' })
+  @ApiResponse({ status: 201, description: 'Novo código gerado com sucesso' })
+  renewLoginCode(
+    @CurrentUserId() userId: string,
+    @Param('patientId') patientId: string,
+    @Body('ttlMinutes') ttlMinutes?: number, 
+  ) {
+    return this.svc.renewLoginCode(userId, patientId, ttlMinutes);
   }
 }

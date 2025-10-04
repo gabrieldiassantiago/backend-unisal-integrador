@@ -1,85 +1,155 @@
-import { Boom } from '@hapi/boom';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion
-} from 'baileys';
+import { Client, LocalAuth } from 'whatsapp-web.js';
 import * as qrcode from 'qrcode-terminal';
 
 @Injectable()
 export class WhatsAppService implements OnModuleInit {
   private logger = new Logger(WhatsAppService.name);
-  private sock: ReturnType<typeof makeWASocket> | null = null;
+  private client: Client | null = null;
   private isConnected = false;
 
   async onModuleInit() {
-    this.startSocket();
+    this.initializeClient();
   }
 
-  private async startSocket() {
-    const { state, saveCreds } = await useMultiFileAuthState('baileys_auth');
-    const { version } = await fetchLatestBaileysVersion();
-
-    this.sock = makeWASocket({
-      auth: state,
-      version,
-      printQRInTerminal: false // Desabilita o QR automático
+  private initializeClient() {
+    // Inicializa o cliente com LocalAuth para persistir sessão
+    this.client = new Client({
+      authStrategy: new LocalAuth({
+        dataPath: '.wwebjs_auth', // Pasta onde salva a sessão
+        clientId: 'main-client' // ID único do cliente
+      }),
+      puppeteer: {
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu'
+        ],
+        headless: true
+      }
     });
 
-    this.sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update;
+    this.setupEventListeners();
+    this.client.initialize();
+  }
 
-      if (connection === 'open') {
-        this.isConnected = true;
-        console.log('\x1b[32m%s\x1b[0m', '✅ WhatsApp conectado com sucesso!');
-        this.logger.log('WhatsApp conectado');
-
-        // 🚀 Envia mensagem teste assim que conectar
-        try {
-          await this.enviarTexto('5512981082276', '🚀 Conexão estabelecida com sucesso!');
-          this.logger.log('Mensagem de teste enviada para 5512981082276');
-        } catch (err) {
-          this.logger.error('Erro ao enviar mensagem de teste:', err);
-        }
-      }
-
-      if (connection === 'close') {
-        this.isConnected = false;
-
-        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
-
-        if (statusCode === DisconnectReason.restartRequired) {
-          this.logger.warn('Conexão perdida, reconectando...');
-          this.startSocket();
-        } else {
-          this.logger.warn(`Conexão fechada (${statusCode}), aguardando ação...`);
-        }
-      }
-
-      // Só exibe QR code se não estiver conectado
-      if (qr && !this.isConnected) {
+  private setupEventListeners() {
+    // Evento QR Code - exibe no terminal
+    this.client.on('qr', (qr) => {
+      if (!this.isConnected) {
         qrcode.generate(qr, { small: true });
-        this.logger.log('QR Code gerado. Escaneie para conectar.');
+        this.logger.log('📱 QR Code gerado. Escaneie para conectar.');
       }
     });
 
-    this.sock.ev.on('creds.update', saveCreds);
+    // Evento de autenticação bem-sucedida
+    this.client.on('authenticated', () => {
+      this.logger.log('✅ Autenticado com sucesso!');
+    });
+
+    // Evento cliente pronto
+    this.client.on('ready', async () => {
+      this.isConnected = true;
+      console.log('\x1b[32m%s\x1b[0m', '✅ WhatsApp conectado com sucesso!');
+      this.logger.log('WhatsApp conectado e pronto!');
+
+      // 🚀 Envia mensagem teste assim que conectar
+      try {
+        const numero = '5512981082276';
+        await this.enviarTexto(numero, '🚀 Conexão estabelecida com sucesso!');
+        this.logger.log(`Mensagem de teste enviada para ${numero}`);
+      } catch (err) {
+        this.logger.error('Erro ao enviar mensagem de teste:', err);
+      }
+    });
+
+    // Evento de falha de autenticação
+    this.client.on('auth_failure', (message) => {
+      this.isConnected = false;
+      this.logger.error('❌ Falha na autenticação:', message);
+    });
+
+    // Evento de desconexão
+    this.client.on('disconnected', (reason) => {
+      this.isConnected = false;
+      this.logger.warn(`⚠️ Desconectado: ${reason}`);
+      
+      // Reconecta automaticamente após 5 segundos
+      setTimeout(() => {
+        this.logger.log('Tentando reconectar...');
+        this.initializeClient();
+      }, 5000);
+    });
+
+    // Evento de mensagens recebidas (opcional)
+    this.client.on('message', async (message) => {
+      this.logger.log(`📩 Mensagem recebida de ${message.from}: ${message.body}`);
+      
+      // Exemplo: responde ao comando !ping
+      if (message.body === '!ping') {
+        await message.reply('pong! 🏓');
+      }
+    });
   }
 
   async enviarTexto(telefone: string, mensagem: string) {
-    if (!this.sock) throw new Error('Socket Baileys não está inicializado.');
-    const jid = telefone.replace(/\D/g, '') + '@s.whatsapp.net';
-    await this.sock.sendMessage(jid, { text: mensagem });
-    this.logger.log(`Mensagem enviada para ${jid}`);
+    if (!this.client) {
+      throw new Error('Cliente WhatsApp não está inicializado.');
+    }
+
+    if (!this.isConnected) {
+      throw new Error('Cliente WhatsApp não está conectado.');
+    }
+
+    try {
+      // Remove caracteres não numéricos
+      const numeroLimpo = telefone.replace(/\D/g, '');
+      
+      // Formato: número@c.us (para contatos individuais)
+      const chatId = `${numeroLimpo}@c.us`;
+      
+      await this.client.sendMessage(chatId, mensagem);
+      this.logger.log(`✅ Mensagem enviada para ${chatId}`);
+    } catch (error) {
+      this.logger.error('Erro ao enviar mensagem:', error);
+      throw error;
+    }
   }
 
   async gerarPairingCode(phoneNumber: string): Promise<string> {
-    if (!this.sock) {
-      throw new Error('Socket Baileys não está inicializado.');
+    if (!this.client) {
+      throw new Error('Cliente WhatsApp não está inicializado.');
     }
-    const code = await this.sock.requestPairingCode(phoneNumber);
-    this.logger.log(`Pairing code gerado: ${code}`);
-    return code;
+
+    try {
+      // Remove caracteres não numéricos
+      const numeroLimpo = phoneNumber.replace(/\D/g, '');
+      
+      // Gera o pairing code
+      const code = await this.client.requestPairingCode(numeroLimpo);
+      this.logger.log(`🔐 Pairing code gerado: ${code}`);
+      return code;
+    } catch (error) {
+      this.logger.error('Erro ao gerar pairing code:', error);
+      throw error;
+    }
+  }
+
+  // Método auxiliar para verificar status
+  getStatus(): { connected: boolean } {
+    return { connected: this.isConnected };
+  }
+
+  // Método para destruir o cliente (cleanup)
+  async destroy() {
+    if (this.client) {
+      await this.client.destroy();
+      this.isConnected = false;
+      this.logger.log('Cliente destruído');
+    }
   }
 }

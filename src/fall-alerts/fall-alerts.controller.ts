@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Get, Query, Patch, Param } from '@nestjs/common';
+// fall-alerts.controller.ts
+import { Controller, Post, Body, Get, Query, Patch, Param, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { FallAlertsService } from './fall-alerts.service';
 import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
@@ -14,21 +15,6 @@ export class FallAlertsController {
     description: 'Endpoint para dispositivos ESP32 enviarem alertas de queda detectados'
   })
   @ApiBody({ type: CreateFallAlertDto })
-  @ApiResponse({
-    status: 201,
-    description: 'Alerta de queda criado com sucesso',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', example: '123e4567-e89b-12d3-a456-426614174000' },
-        status: { type: 'string', enum: ['PENDING', 'CONFIRMED', 'IGNORED'], example: 'PENDING' },
-        latitude: { type: 'number', example: -23.5505 },
-        longitude: { type: 'number', example: -46.6333 },
-        location: { type: 'string', example: 'São Paulo, SP' },
-        createdAt: { type: 'string', format: 'date-time' }
-      }
-    }
-  })
   async createAlert(@Body() data: CreateFallAlertDto) {
     return this.fallAlertsService.createAlert(data);
   }
@@ -42,52 +28,58 @@ export class FallAlertsController {
     name: 'patientId',
     description: 'UUID do paciente',
     type: 'string',
-    example: '123e4567-e89b-12d3-a456-426614174000'
+    required: true,
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Lista de alertas do paciente',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          status: { type: 'string', enum: ['PENDING', 'CONFIRMED', 'IGNORED'] },
-          latitude: { type: 'number' },
-          longitude: { type: 'number' },
-          location: { type: 'string' },
-          createdAt: { type: 'string', format: 'date-time' }
-        }
-      }
-    }
+async getAlerts(@Query('patientId') patientId: string) {
+  if (!patientId) {
+    throw new BadRequestException('patientId é obrigatório');
+  }
+  return this.fallAlertsService.getAlertsByPatient(patientId);
+}
+
+  // 🆕 Marcar como falso alerta
+  @Patch(':id/false-alarm')
+  @ApiOperation({
+    summary: 'Marcar alerta como falso',
+    description: 'Cuidador marca o alerta como falso alarme'
   })
-  async getAlerts(@Query('patientId') patientId: string) {
-    return this.fallAlertsService.getAlertsByPatient(patientId);
+  async markFalseAlarm(
+    @Param('id') id: string,
+    @Body() body: { caregiverId: string }
+  ) {
+    return this.fallAlertsService.markFalseAlarm(id, body.caregiverId);
+  }
+
+  // 🆕 Marcar como "estou indo verificar"
+  @Patch(':id/verifying')
+  @ApiOperation({
+    summary: 'Marcar que está verificando',
+    description: 'Cuidador indica que está indo verificar o paciente'
+  })
+  async markVerifying(
+    @Param('id') id: string,
+    @Body() body: { caregiverId: string }
+  ) {
+    return this.fallAlertsService.markVerifying(id, body.caregiverId);
+  }
+
+  // 🆕 Confirmar após verificação
+  @Patch(':id/confirm-after-verification')
+  @ApiOperation({
+    summary: 'Confirmar alerta após verificação',
+    description: 'Cuidador confirma o alerta após verificar pessoalmente'
+  })
+  async confirmAfterVerification(
+    @Param('id') id: string,
+    @Body() body: { caregiverId: string }
+  ) {
+    return this.fallAlertsService.confirmAfterVerification(id, body.caregiverId);
   }
 
   @Patch(':id/confirm')
   @ApiOperation({
-    summary: 'Confirmar alerta',
-    description: 'Marca um alerta como confirmado (paciente está bem)'
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'UUID do alerta',
-    type: 'string',
-    example: '123e4567-e89b-12d3-a456-426614174000'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Alerta confirmado com sucesso',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        status: { type: 'string', example: 'CONFIRMED' },
-        confirmedAt: { type: 'string', format: 'date-time' }
-      }
-    }
+    summary: 'Confirmar alerta automaticamente',
+    description: 'Marca um alerta como confirmado (usado pelo sistema)'
   })
   async confirmAlert(@Param('id') id: string) {
     return this.fallAlertsService.confirmAlert(id);

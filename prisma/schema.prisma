@@ -5,8 +5,15 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = "postgresql://intelisensor:intelisensor@167.99.57.166:5432/intelisensor"
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNDECLARED
 }
 
 // =================== MODELS ===================
@@ -14,47 +21,48 @@ datasource db {
 model User {
   id         String   @id @default(uuid())
   name       String
-  age        Int?                         // relevante para pacientes
-  email      String?  @unique             // opcional (pacientes não precisam)
-  password   String?                      // <-- opcional: paciente sem senha
+  birthDate  DateTime?
+  email      String?  @unique
+  password   String?
   role       Role
   hasAccount Boolean  @default(false)
   createdAt  DateTime @default(now())
+  gender     Gender?
 
   // relações
   devices       Device[]
   contacts      EmergencyContact[]
-  patients      CaregiverPatient[] @relation("CaregiverPatients")   // pacientes deste cuidador
-  caregivers    CaregiverPatient[] @relation("PatientCaregivers")   // cuidadores deste paciente
+  patients      CaregiverPatient[] @relation("CaregiverPatients")
+  caregivers    CaregiverPatient[] @relation("PatientCaregivers")
   fallAlerts    FallAlert[]        @relation("FallAlertPatient")
 
   // access codes
-  issuedCodes   AccessCode[] @relation("IssuedByCaregiver")         // códigos emitidos por este cuidador
-  loginCodes    AccessCode[] @relation("LoginForPatient")           // códigos destinados a este paciente
+  issuedCodes   AccessCode[] @relation("IssuedByCaregiver")
+  loginCodes    AccessCode[] @relation("LoginForPatient")
 
   // sessões
   refreshTokens RefreshToken[]
+
+  // 🆕 alertas respondidos por este cuidador
+  respondedAlerts FallAlert[] @relation("AlertRespondedBy")
 
   @@index([role])
 }
 
 model Device {
   id               String   @id @default(uuid())
-  deviceIdentifier String   @unique           // QR aponta pra isso ou para token
+  deviceIdentifier String   @unique
   apiKeyHash       String
   status           DeviceStatus @default(ACTIVE)
   
-  // Pareamento por QR/token (opcional)
-  pairingDigest    String?   @unique          // HMAC(token, secret)
+  pairingDigest    String?   @unique
   pairingExpiresAt DateTime?
   pairedAt         DateTime?
 
-  // Telemetria / manutenção
   lastSeenAt       DateTime?
   firmwareVersion  String?
 
-  // Dono (paciente)
-  patientId        String?   // <- deixe opcional
+  patientId        String?
   patient          User?      @relation(fields: [patientId], references: [id])
   registeredAt     DateTime @default(now())
 
@@ -70,7 +78,6 @@ model EmergencyContact {
   patientId String
   patient   User     @relation(fields: [patientId], references: [id])
 
-  // alerts que este contato confirmou
   confirmedAlerts FallAlert[] @relation("FallAlertConfirmedBy")
 
   priority  Int      @default(1)
@@ -109,17 +116,23 @@ model FallAlert {
 
   confirmationMethod   ConfirmationMethod?
 
+  // 🆕 Campos para rastreamento de resposta do cuidador
+  respondedBy          String?  // UUID do cuidador que respondeu
+  responder            User?    @relation("AlertRespondedBy", fields: [respondedBy], references: [id])
+  respondedAt          DateTime?
+  verificationDeadline DateTime? // Prazo para confirmar após "estou verificando"
+
   @@index([patientId, createdAt])
+  @@index([respondedBy])
 }
 
 // Código de LOGIN simplificado para paciente e/ou de PAREAMENTO de device
 model AccessCode {
   id            String   @id @default(uuid())
 
-  // segurança
-  codeDigest    String   @unique    // HMAC(code, secret) -> lookup/indexável
-  codeHash      String               // bcrypt(code) -> proteção em repouso
-  codeDisplay   String               // ex.: "123-456" (apenas para exibir/log leve)
+  codeDigest    String   @unique
+  codeHash      String
+  codeDisplay   String
   type          CodeType @default(LOGIN_PATIENT)
 
   caregiverId   String
@@ -128,13 +141,11 @@ model AccessCode {
   patientId     String
   patient       User     @relation("LoginForPatient", fields: [patientId], references: [id])
 
-  // ciclo de vida
   expiresAt     DateTime
   usedAt        DateTime?
   revokedAt     DateTime?
-  revokedById   String?             // opcional: quem revogou (cuidador/admin)
+  revokedById   String?
 
-  // controle de uso
   maxUses       Int      @default(1)
   uses          Int      @default(0)
   attempts      Int      @default(0)
@@ -151,8 +162,8 @@ model RefreshToken {
   userId     String
   user       User     @relation(fields: [userId], references: [id])
 
-  deviceId   String?              // identifica o aparelho (opcional)
-  tokenHash  String   @unique     // hash do refresh token (nunca guarde em claro)
+  deviceId   String?
+  tokenHash  String   @unique
   createdAt  DateTime @default(now())
   expiresAt  DateTime
   revokedAt  DateTime?
@@ -167,10 +178,13 @@ enum Role {
   CAREGIVER
 }
 
+// 🆕 Novos status de alerta
 enum FallStatus {
-  PENDING
-  CONFIRMED
-  IGNORED
+  PENDING        // Alerta criado, aguardando resposta do cuidador prioridade 1
+  VERIFYING      // Cuidador indicou que está indo verificar
+  FALSE_ALARM    // Cuidador marcou como falso alerta
+  CONFIRMED      // Alerta confirmado (automaticamente ou manualmente)
+  IGNORED        // Alerta ignorado/cancelado
 }
 
 enum ConfirmationMethod {

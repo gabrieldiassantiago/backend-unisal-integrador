@@ -232,6 +232,9 @@ PublishScripts/
 *.nuget.props
 *.nuget.targets
 
+/.wwebjs_auth
+/.webjs_auth
+
 # Microsoft Azure Build Output
 csx/
 *.build.csdef

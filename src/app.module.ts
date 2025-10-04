@@ -10,6 +10,8 @@ import { AuthModule } from './auth/auth.module';
 import { BullModule } from '@nestjs/bullmq';
 import { CaregiverModule } from './caregiver/caregiver.module';
 import { PatientModule } from './patient/patient.module';
+import { ConfigModule } from '@nestjs/config';
+import { TwilioModule } from './twilio/twillio.module';
 
 @Module({
   imports: [
@@ -21,12 +23,16 @@ import { PatientModule } from './patient/patient.module';
     WhatsappModule,
     CaregiverModule,
     PatientModule,
+    TwilioModule, 
+    ConfigModule.forRoot({
+      isGlobal: true
+    }),
 
-    // Configuração BullMQ + Redis
     BullModule.forRoot({
       connection: {
         host: process.env.REDIS_HOST,
         port: parseInt(process.env.REDIS_PORT, 10),
+        password: 'intelisensor',
       },
     }),
 
