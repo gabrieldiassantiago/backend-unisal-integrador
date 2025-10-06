@@ -39,4 +39,10 @@ export class EmergencyContactsService {
   });
 }
 
+  async getContactsByPatient(patientId: string) {
+    return this.prismaService.emergencyContact.findMany({
+      where: {patientId}
+    })
+  }
+
 }

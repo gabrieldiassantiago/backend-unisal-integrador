@@ -1,4 +1,4 @@
-import { Body, ConflictException, Controller, Post } from '@nestjs/common';
+import { Body, ConflictException, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiConflictResponse } from '@nestjs/swagger';
 import { EmergencyContactsService } from './emergency-contacts.service';
 import { CreateEmergencyContactDto } from './dtos/CreateEmergencyContactDto';
@@ -48,5 +48,10 @@ export class EmergencyContactsController {
       }
       throw error;
     }
+  }
+
+  @Get(':patientId')
+  async getContactsByPatient(@Param('patientId') patientId: string) {
+    return this.emergencyContactsService.getContactsByPatient(patientId);
   }
 }
