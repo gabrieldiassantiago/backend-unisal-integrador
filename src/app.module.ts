@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { BullModule } from '@nestjs/bullmq';
 import { CaregiverModule } from './caregiver/caregiver.module';
 import { PatientModule } from './patient/patient.module';
+import { FamilyModule } from './family/family.module';
 import { ConfigModule } from '@nestjs/config';
 import { TwilioModule } from './twilio/twillio.module';
 
@@ -21,6 +22,7 @@ import { TwilioModule } from './twilio/twillio.module';
     EmergencyContactsModule,
     CaregiverModule,
     PatientModule,
+    FamilyModule,
     TwilioModule, 
     ConfigModule.forRoot({
       isGlobal: true
