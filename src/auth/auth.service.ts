@@ -10,32 +10,74 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  // auth.service.ts
-    async validateUser(email: string, password: string) {
-      
-      const user = await this.prisma.user.findUnique({ where: { email } });
+  // Método atualizado para suportar CAREGIVER e FAMILY_MEMBER
+  async validateUser(email: string, password: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
 
-      if (!user) return null;
+    if (!user) return null;
 
-      // impede login de paciente por e-mail
-      if (user.role !== 'CAREGIVER') return null;
+    // Permite login apenas de CAREGIVER e FAMILY_MEMBER (não PATIENT)
+    if (user.role?.toString() !== 'CAREGIVER' && user.role?.toString() !== 'FAMILY_MEMBER') return null;
 
-      const ok = await bcrypt.compare(password, user.password);
-      if (!ok) return null;
+    // Verifica se tem senha definida
+    if (!user.password) return null;
 
-      const { password: _, ...result } = user;
-      return result;
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return null;
+
+    const { password: _, ...result } = user;
+    return result;
+  }
+
+
+  async login(user: any) {
+    let payload: any = { 
+      sub: user.id, 
+      email: user.email, 
+      role: user.role, 
+      name: user.name 
+    };
+
+    // Se é familiar, incluir informações de acesso aos pacientes
+    if (user.role?.toString() === 'FAMILY_MEMBER') {
+      try {
+        const familyRelations = await this.prisma.familyRelation.findMany({
+          where: {
+            familyMemberId: user.id,
+            acceptedAt: { not: null },
+            revokedAt: null,
+          },
+          include: {
+            patient: { select: { id: true, name: true } },
+            permissions: true,
+          },
+        });
+
+        const patientAccess = familyRelations.map((relation) => ({
+          patientId: relation.patientId,
+          patientName: relation.patient.name,
+          permissions: {
+            canViewAlerts: relation.permissions?.canViewAlerts ?? true,
+            canRespondAlerts: relation.permissions?.canRespondAlerts ?? false,
+            canViewProfile: relation.permissions?.canViewProfile ?? true,
+            canEditProfile: relation.permissions?.canEditProfile ?? false,
+            canManageContacts: relation.permissions?.canManageContacts ?? false,
+            canInviteFamily: relation.permissions?.canInviteFamily ?? false,
+          },
+        }));
+
+        payload.patientAccess = patientAccess;
+      } catch (error) {
+        console.error('Error loading family relations:', error.message);
+        // Se der erro, continua sem as informações familiares
+        payload.patientAccess = [];
+      }
     }
 
-
-    async login(user: any) {
-
-    const payload = { sub: user.id, email: user.email, role: user.role, name: user.name };
     return {
       access_token: this.jwtService.sign(payload),
       user: payload,
     };
-    
   }
 
     /*
