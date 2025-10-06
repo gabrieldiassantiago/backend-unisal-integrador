@@ -44,6 +44,8 @@ export class UsersService {
         contacts: true,
         caregivers: true,
         patients: true,
+        familyMemberRelations: true,
+        patientFamilyRelations: true
       },
     });
   }
