@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dtos/login.dto';
 import { LoginResponseDto } from './dtos/login-response.dto';
+import { FamilyMemberLoginDto } from './dtos/family-member-login.dto';
 
 @ApiTags('Autenticação')
 @Controller('auth')
@@ -47,6 +48,66 @@ export class AuthController {
 
     if (!user) {
       throw new UnauthorizedException('E-mail ou senha inválidos.');
+    }
+    
+    return this.authService.login(user);
+  }
+
+  @Post('family/login')
+  @ApiOperation({ 
+    summary: 'Login de familiar',
+    description: 'Autentica um usuário familiar e retorna um token JWT com permissões específicas' 
+  })
+  @ApiBody({ type: FamilyMemberLoginDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Login realizado com sucesso',
+    schema: {
+      example: {
+        access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        user: {
+          sub: 'uuid-do-familiar',
+          email: 'familiar@example.com',
+          role: 'FAMILY_MEMBER',
+          name: 'Maria Silva',
+          patientAccess: [
+            {
+              patientId: 'uuid-do-paciente',
+              patientName: 'João Idoso',
+              permissions: {
+                canViewAlerts: true,
+                canRespondAlerts: false,
+                canViewProfile: true,
+                canEditProfile: false,
+                canManageContacts: false,
+                canInviteFamily: false
+              }
+            }
+          ]
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Credenciais inválidas',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'E-mail ou senha inválidos.',
+        error: 'Unauthorized'
+      }
+    }
+  })
+  async familyLogin(@Body() loginDto: FamilyMemberLoginDto) {
+    const user = await this.authService.validateUser(loginDto.email, loginDto.password);
+
+    if (!user) {
+      throw new UnauthorizedException('E-mail ou senha inválidos.');
+    }
+
+    if (user.role?.toString() !== 'FAMILY_MEMBER') {
+      throw new UnauthorizedException('Este endpoint é apenas para familiares. Use /auth/login para cuidadores.');
     }
     
     return this.authService.login(user);
