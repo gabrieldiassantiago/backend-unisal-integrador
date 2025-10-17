@@ -15,6 +15,8 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { UserResponseDto } from './dtos/user-response.dto';
 import { UserWithRelationsDto } from './dtos/user-with-relations.dto';
+import { VerifyEmailDto } from './dtos/verify-email.dto';
+import { ResendVerificationDto } from './dtos/resend-verification.dto';
 import { JwtAuthGuard } from '@src/auth/jwt-auth.guard';
 
 @ApiTags('Usuários')
@@ -25,17 +27,83 @@ export class UsersController {
   @Post()
   @ApiOperation({
     summary: 'Criar cuidador',
-    description: 'Cria um novo usuário cuidador (CARE­GIVER) com senha criptografada',
+    description: 'Inicia o processo de cadastro enviando código de verificação por email. O usuário só será criado após verificar o código.',
   })
   @ApiBody({ type: CreateUserDto })
-  @ApiResponse({ status: HttpStatus.CREATED, description: 'Usuário criado com sucesso', type: UserResponseDto })
+  @ApiResponse({ 
+    status: HttpStatus.CREATED, 
+    description: 'Código de verificação enviado por email.', 
+    schema: {
+      example: {
+        message: 'Código de verificação enviado para seu email. Verifique seu email para completar o cadastro.',
+        email: 'usuario@email.com',
+        expiresIn: '10 minutos'
+      }
+    }
+  })
   @ApiResponse({
     status: HttpStatus.CONFLICT,
     description: 'Email já está em uso',
-    schema: { example: { statusCode: 409, message: 'User with email x@y.com already exists', error: 'Conflict' } },
+    schema: { example: { statusCode: 409, message: 'Usuário com o email x@y.com já existe', error: 'Conflict' } },
   })
-  async create(@Body() dto: CreateUserDto): Promise<UserResponseDto> {
+  async create(@Body() dto: CreateUserDto) {
     return this.usersService.createUser(dto);
+  }
+
+  @Post('verify-email')
+  @ApiOperation({
+    summary: 'Verificar email e criar conta',
+    description: 'Verifica o código de 6 dígitos enviado por email e cria a conta do usuário',
+  })
+  @ApiBody({ type: VerifyEmailDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Email verificado e conta criada com sucesso',
+    schema: {
+      example: {
+        message: 'Email verificado com sucesso! Sua conta foi criada. Agora você pode fazer login.',
+        verified: true,
+        user: {
+          id: 'uuid',
+          name: 'João Silva',
+          email: 'joao@email.com',
+          role: 'CAREGIVER',
+          hasAccount: true,
+          emailVerified: true,
+          createdAt: '2025-10-16T...'
+        }
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Código inválido ou expirado',
+  })
+  async verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.usersService.verifyEmail(dto);
+  }
+
+  @Post('resend-verification')
+  @ApiOperation({
+    summary: 'Reenviar código de verificação',
+    description: 'Reenvia o código de verificação para o email fornecido',
+  })
+  @ApiBody({ type: ResendVerificationDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Novo código enviado',
+    schema: {
+      example: {
+        message: 'Novo código enviado para seu email',
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Usuário não encontrado ou email já verificado',
+  })
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    return this.usersService.resendVerificationCode(dto.email);
   }
 
   @UseGuards(JwtAuthGuard)
