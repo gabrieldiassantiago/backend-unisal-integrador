@@ -22,6 +22,8 @@ export class AuthService {
     // Verifica se tem senha definida
     if (!user.password) return null;
 
+    // ✅ Não precisa verificar emailVerified pois usuário só é criado após verificação
+
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return null;
 
