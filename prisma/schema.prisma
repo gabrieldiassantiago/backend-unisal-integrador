@@ -19,15 +19,16 @@ enum Gender {
 // =================== MODELS ===================
 
 model User {
-  id         String   @id @default(uuid())
-  name       String
-  birthDate  DateTime?
-  email      String?  @unique
-  password   String?
-  role       Role
-  hasAccount Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  gender     Gender?
+  id              String   @id @default(uuid())
+  name            String
+  birthDate       DateTime?
+  email           String?  @unique
+  password        String?
+  role            Role
+  hasAccount      Boolean  @default(false)
+  emailVerified   Boolean  @default(true)  // 🆕 Sempre true, pois só cria após verificar
+  createdAt       DateTime @default(now())
+  gender          Gender?
 
   // relações
   devices       Device[]
@@ -45,6 +46,9 @@ model User {
 
   // 🆕 alertas respondidos por este cuidador
   respondedAlerts FallAlert[] @relation("AlertRespondedBy")
+
+  // 🆕 push tokens for notifications
+  pushTokens PushToken[]
 
   // 🆕 relações familiares
   primaryCaregiverRelations FamilyRelation[] @relation("PrimaryCaregiverRelations")
@@ -250,4 +254,35 @@ enum DeviceStatus {
   INACTIVE
   MAINTENANCE 
   REVOKED
+}
+
+
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  platform  String?  // 'android' | 'ios' | 'web'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// 🆕 Tabela para verificação de email
+model EmailVerification {
+  id          String   @id @default(uuid())
+  email       String
+  code        String   // Código de 6 dígitos
+  verified    Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  verifiedAt  DateTime?
+  attempts    Int      @default(0)
+  
+  // 🆕 Dados temporários do usuário (antes de criar)
+  tempUserData Json?  // {name, hashedPassword, role}
+
+  @@index([email])
+  @@index([code])
 }
