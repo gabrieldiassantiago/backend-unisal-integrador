@@ -32,7 +32,13 @@ export class FallAlertsController {
   })
 async getAlerts(@Query('patientId') patientId: string) {
 
+  if (!patientId) {
+    throw new BadRequestException('O ID o paciente é obrigatório');
+  }
+
   return this.fallAlertsService.getAlertsByPatient(patientId);
+
+  
 }
 
   // 🆕 Marcar como falso alerta
