@@ -20,30 +20,54 @@ export class FallAlertsService {
     private readonly twilioService: TwilioService,
   ) {}
 
-  // 🚨 Criar novo alerta
   async createAlert(data: CreateFallAlertDto) {
+    console.time('🔍 TOTAL createAlert');
+    
+    console.time('🔍 Device lookup');
     const device = await this.prismaService.device.findUnique({
       where: { deviceIdentifier: data.serial },
+      select: {
+        id: true,
+        patientId: true,
+        apiKeyHash: true,
+        deviceIdentifier: true
+      }
     });
+    console.timeEnd('🔍 Device lookup');
+    
     if (!device) {
       throw new deviceNotExisting(data.serial);
     }
 
+    console.time('🔍 bcrypt compare');
     const isValidApiKey = await bcrypt.compare(data.apiKey, device.apiKeyHash);
+    console.timeEnd('🔍 bcrypt compare');
+    
     if (!isValidApiKey) {
       throw new apiKeyInvalid(data.apiKey);
     }
 
+    console.time('🔍 Create alert in DB');
+    // ⚡ OTIMIZAÇÃO: Remove createdAt desnecessário (Prisma faz automaticamente)
     const alert = await this.prismaService.fallAlert.create({
       data: {
         deviceId: device.id,
         patientId: device.patientId,
         latitude: data.latitude,
         longitude: data.longitude,
-        createdAt: new Date(),
         status: 'PENDING',
       },
+      select: {
+        id: true,
+        deviceId: true,
+        patientId: true,
+        latitude: true,
+        longitude: true,
+        createdAt: true,
+        status: true
+      }
     });
+    console.timeEnd('🔍 Create alert in DB');
 
     const payload = {
       id: alert.id,
@@ -55,55 +79,40 @@ export class FallAlertsService {
       status: alert.status,
     };
 
-    // Emite para WebSocket
+    console.time('🔍 WebSocket emit');
     this.gateway.emitNewAlert(payload);
+    console.timeEnd('🔍 WebSocket emit');
 
-    // Busca cuidador prioridade 1 e envia WhatsApp
-    const primaryCaregiver = await this.prismaService.emergencyContact.findFirst({
-      where: { patientId: device.patientId, priority: 1 },
-    });
+    const caregiverTokens = await this.prismaService.pushToken.findMany({
+      where: {
+        user: {
+          patients: {
+            some: { id: device.patientId }
+          }
+        }
+      },
+      select: { token: true }
+    })
+    const tokens = caregiverTokens.map(t => t.token);
 
-    if (primaryCaregiver) {
-      const patient = await this.prismaService.user.findUnique({
-        where: { id: device.patientId },
-      });
 
-      const googleMapsLink = `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
-      
-      await this.twilioService.sendFallAlertWhatsApp(primaryCaregiver.phone, {
-        contactName: primaryCaregiver.name,
-        patientName: patient?.name || 'Paciente',
-        location: googleMapsLink,
-        priority: primaryCaregiver.priority
-      });
-      
-      // Tenta ligar para o contato prioritário com monitoramento
-      try {
-        console.log(`📞 Tentando ligar para contato prioritário: ${primaryCaregiver.name}`);
-        const call = await this.twilioService.makeFallAlertCall(primaryCaregiver.phone, patient?.name);
-        
-        console.log(`📱 Chamada iniciada para ${primaryCaregiver.name}. SID: ${call.sid}`);
-        console.log(`📞 Status imediato após criação: ${call.status}`);
-        
-        // Agenda um job para monitorar esta chamada
-        await this.alertsQueue.add(
-          'monitorCall',
-          { 
-            alertId: alert.id,
-            callSid: call.sid,
-            contactId: primaryCaregiver.id,
-            contactName: primaryCaregiver.name,
-            patientName: patient?.name
-          },
-          { delay: 5000 }, // Começa a monitorar após 5 segundos
-        );
-        
-      } catch (err) {
-        console.error('❌ Erro ao ligar para contato prioritário:', err);
-      }
-      
-      // Agenda notificação para contatos secundários após 3 minutos caso não haja resposta
-      await this.alertsQueue.add(
+    console.time('🔍 Queue jobs');
+    // ⚡ OTIMIZAÇÃO: Jobs em paralelo ao invés de sequencial
+    await Promise.all([
+      this.alertsQueue.add(
+        'processInitialAlert',
+        { 
+          alertId: alert.id,
+          patientId: device.patientId,
+          latitude: data.latitude,
+          longitude: data.longitude
+        },
+        { 
+          priority: 10,
+          delay: 100
+        }
+      ),
+      this.alertsQueue.add(
         'notifySecondaryContacts',
         { 
           alertId: alert.id,
@@ -111,17 +120,17 @@ export class FallAlertsService {
           latitude: data.latitude,
           longitude: data.longitude
         },
-        { delay: 180000 }, // 3 minutos
-      );
-    }
+        { delay: 180000 }
+      ),
+      this.alertsQueue.add(
+        'autoConfirm',
+        { alertId: alert.id },
+        { delay: 300000 }
+      )
+    ]);
+    console.timeEnd('🔍 Queue jobs');
 
-    // Agenda confirmação automática para 5 minutos
-    await this.alertsQueue.add(
-      'autoConfirm',
-      { alertId: alert.id },
-      { delay: 300000 }, // 5 minutos (300000ms)
-    );
-
+    console.timeEnd('🔍 TOTAL createAlert');
     return payload;
   }
 
@@ -132,6 +141,7 @@ export class FallAlertsService {
     });
 
     if (!alert) throw new alertNoExisting(alertId);
+
     if (alert.status !== 'PENDING') {
       throw new BadRequestException('Alerta já foi processado');
     }
@@ -186,7 +196,7 @@ export class FallAlertsService {
     return updated;
   }
 
-  // 🆕 Marcar como "estou verificando"
+  // Marcar como "estou verificando"
   async markVerifying(alertId: string, caregiverId: string) {
     const alert = await this.prismaService.fallAlert.findUnique({
       where: { id: alertId },
@@ -428,7 +438,7 @@ Vamos acionar todos os contatos de emergência agora. 🚨`;
           // Verifica se a chamada foi atendida
           // 'completed' = chamada foi atendida e finalizada 
           // 'in-progress' = chamada foi atendida e ainda está em andamento
-          if (callRecord.status === 'completed' || callRecord.status === 'in-progress') {
+          if (callRecord.status === 'completed') {
             console.log(`🎉 CHAMADA ATENDIDA por ${contatoPrioritario.name} na tentativa ${tentativa}! Status: ${callRecord.status}`);
             callAnswered = true;
 

@@ -85,6 +85,84 @@ export class FallAlertsProcessor extends WorkerHost {
       });
     }
     
+    // 🆕 Job para processar alerta inicial (WhatsApp + Chamada para contato prioritário)
+    if (job.name === 'processInitialAlert') {
+      const { alertId, patientId, latitude, longitude } = job.data;
+      console.log(`[BullMQ] Processando alerta inicial para alerta ${alertId}`);
+
+      try {
+        // Verifica se o alerta ainda existe e está pendente
+        const alert = await this.prismaService.fallAlert.findUnique({
+          where: { id: alertId },
+        });
+
+        if (!alert || alert.status !== 'PENDING') {
+          console.log(`[BullMQ] Alerta ${alertId} não encontrado ou já processado (${alert?.status})`);
+          return;
+        }
+
+        // Busca contato prioritário e paciente
+        const primaryCaregiver = await this.prismaService.emergencyContact.findFirst({
+          where: { patientId: patientId, priority: 1 },
+        });
+
+        if (!primaryCaregiver) {
+          console.log(`[BullMQ] Nenhum contato prioritário encontrado para paciente ${patientId}`);
+          return;
+        }
+
+        const patient = await this.prismaService.user.findUnique({
+          where: { id: patientId },
+        });
+
+        const googleMapsLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
+
+        // 1️⃣ Envia WhatsApp para contato prioritário
+        try {
+          console.log(`[BullMQ] 📱 Enviando WhatsApp para contato prioritário: ${primaryCaregiver.name}`);
+          await this.twilioService.sendFallAlertWhatsApp(primaryCaregiver.phone, {
+            contactName: primaryCaregiver.name,
+            patientName: patient?.name || 'Paciente',
+            location: googleMapsLink,
+            priority: primaryCaregiver.priority
+          });
+          console.log(`[BullMQ] ✅ WhatsApp enviado com sucesso para ${primaryCaregiver.name}`);
+        } catch (err) {
+          console.error(`[BullMQ] ❌ Erro ao enviar WhatsApp para ${primaryCaregiver.name}:`, err);
+        }
+
+        // 2️⃣ Tenta ligar para o contato prioritário
+        try {
+          console.log(`[BullMQ] 📞 Tentando ligar para contato prioritário: ${primaryCaregiver.name}`);
+          const call = await this.twilioService.makeFallAlertCall(primaryCaregiver.phone, patient?.name);
+          
+          console.log(`[BullMQ] 📱 Chamada iniciada para ${primaryCaregiver.name}. SID: ${call.sid}`);
+          console.log(`[BullMQ] 📞 Status imediato após criação: ${call.status}`);
+          
+          // Agenda um job para monitorar esta chamada
+          await this.alertsQueue.add(
+            'monitorCall',
+            { 
+              alertId: alertId,
+              callSid: call.sid,
+              contactId: primaryCaregiver.id,
+              contactName: primaryCaregiver.name,
+              patientName: patient?.name
+            },
+            { delay: 5000 }, // Começa a monitorar após 5 segundos
+          );
+          
+        } catch (err) {
+          console.error(`[BullMQ] ❌ Erro ao ligar para contato prioritário ${primaryCaregiver.name}:`, err);
+        }
+
+        console.log(`[BullMQ] ✅ Processamento inicial do alerta ${alertId} concluído`);
+
+      } catch (error) {
+        console.error(`[BullMQ] ❌ Erro no processamento inicial do alerta ${alertId}:`, error);
+      }
+    }
+    
     // 🆕 Job para notificar contatos secundários após timeout do contato prioritário
     if (job.name === 'notifySecondaryContacts') {
       const { alertId, patientId, latitude, longitude } = job.data;

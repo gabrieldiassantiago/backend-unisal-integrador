@@ -25,6 +25,10 @@ export class EmergencyContactsService {
     }
   });
 
+  if (contactExists) {
+    throw new Error('Contato já existe');
+  }
+
 
   // define prioridade (ex: próximo número baseado em quantos já existem)
   const count = await this.prismaService.emergencyContact.count({
@@ -38,5 +42,24 @@ export class EmergencyContactsService {
     }
   });
 }
+
+  async getContactsByPatient(patientId: string) {
+    return this.prismaService.emergencyContact.findMany({
+      where: {patientId}
+    })
+  }
+
+  async deleteContact(contactId: string) {
+    return this.prismaService.emergencyContact.delete({
+      where: {id: contactId}
+    })
+  }
+
+  async updateContact(contactId: string, data: Partial<CreateEmergencyContactDto>) {
+    return this.prismaService.emergencyContact.update({
+      where: {id: contactId},
+      data
+    })
+  }
 
 }

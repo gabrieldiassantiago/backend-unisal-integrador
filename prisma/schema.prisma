@@ -19,15 +19,16 @@ enum Gender {
 // =================== MODELS ===================
 
 model User {
-  id         String   @id @default(uuid())
-  name       String
-  birthDate  DateTime?
-  email      String?  @unique
-  password   String?
-  role       Role
-  hasAccount Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  gender     Gender?
+  id              String   @id @default(uuid())
+  name            String
+  birthDate       DateTime?
+  email           String?  @unique
+  password        String?
+  role            Role
+  hasAccount      Boolean  @default(false)
+  emailVerified   Boolean  @default(true)  // 🆕 Sempre true, pois só cria após verificar
+  createdAt       DateTime @default(now())
+  gender          Gender?
 
   // relações
   devices       Device[]
@@ -45,6 +46,14 @@ model User {
 
   // 🆕 alertas respondidos por este cuidador
   respondedAlerts FallAlert[] @relation("AlertRespondedBy")
+
+  // 🆕 push tokens for notifications
+  pushTokens PushToken[]
+
+  // 🆕 relações familiares
+  primaryCaregiverRelations FamilyRelation[] @relation("PrimaryCaregiverRelations")
+  familyMemberRelations     FamilyRelation[] @relation("FamilyMemberRelations") 
+  patientFamilyRelations    FamilyRelation[] @relation("PatientFamilyRelations")
 
   @@index([role])
 }
@@ -141,6 +150,10 @@ model AccessCode {
   patientId     String
   patient       User     @relation("LoginForPatient", fields: [patientId], references: [id])
 
+  // 🆕 Dados para convite familiar
+  familyEmail   String?  // Email do familiar a ser convidado
+  familyName    String?  // Nome do familiar
+
   expiresAt     DateTime
   usedAt        DateTime?
   revokedAt     DateTime?
@@ -171,11 +184,47 @@ model RefreshToken {
   @@index([userId])
 }
 
+// 🆕 Nova tabela para hierarquia familiar
+model FamilyRelation {
+  id                 String   @id @default(uuid())
+  primaryCaregiverId String   // Cuidador principal (quem criou)
+  familyMemberId     String   // Familiar convidado
+  patientId          String   // Paciente ao qual ambos têm acesso
+  
+  primaryCaregiver   User     @relation("PrimaryCaregiverRelations", fields: [primaryCaregiverId], references: [id])
+  familyMember       User     @relation("FamilyMemberRelations", fields: [familyMemberId], references: [id])
+  patient            User     @relation("PatientFamilyRelations", fields: [patientId], references: [id])
+  
+  permissions        FamilyPermissions?
+  invitedAt          DateTime @default(now())
+  acceptedAt         DateTime?
+  revokedAt          DateTime?
+  
+  @@unique([primaryCaregiverId, familyMemberId, patientId])
+  @@index([patientId])
+  @@index([familyMemberId])
+}
+
+// 🆕 Sistema de permissões granular
+model FamilyPermissions {
+  id                String   @id @default(uuid())
+  relationId        String   @unique
+  relation          FamilyRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  
+  canViewAlerts       Boolean @default(true)   // Ver alertas de queda
+  canRespondAlerts    Boolean @default(false)  // Responder alertas
+  canViewProfile      Boolean @default(true)   // Ver perfil do paciente
+  canEditProfile      Boolean @default(false)  // Editar perfil
+  canManageContacts   Boolean @default(false)  // Gerenciar contatos emergência
+  canInviteFamily     Boolean @default(false)  // Convidar outros familiares
+}
+
 // =================== ENUMS ===================
 
 enum Role {
   PATIENT
   CAREGIVER
+  FAMILY_MEMBER  // 🆕 Novo role para familiares
 }
 
 enum FallStatus {
@@ -197,11 +246,43 @@ enum ConfirmationMethod {
 enum CodeType {
   LOGIN_PATIENT
   DEVICE_PAIRING
+  FAMILY_INVITE  // 🆕 Novo tipo para convite de familiares
 }
 
 enum DeviceStatus {
   ACTIVE
   INACTIVE
-  MAINTENANCE
+  MAINTENANCE 
   REVOKED
+}
+
+
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  platform  String?  // 'android' | 'ios' | 'web'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// 🆕 Tabela para verificação de email
+model EmailVerification {
+  id          String   @id @default(uuid())
+  email       String
+  code        String   // Código de 6 dígitos
+  verified    Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  verifiedAt  DateTime?
+  attempts    Int      @default(0)
+  
+  // 🆕 Dados temporários do usuário (antes de criar)
+  tempUserData Json?  // {name, hashedPassword, role}
+
+  @@index([email])
+  @@index([code])
 }
