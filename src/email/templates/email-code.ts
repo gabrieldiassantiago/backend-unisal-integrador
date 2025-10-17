@@ -21,7 +21,7 @@ export const emailCodeVerificationTemplate = (code: string, userName: string) =>
                 <tr>
                   <td align="center">
                     
-                    <img src="logo2.svg" alt="InteliSensor Logo" width="360" height="40" style="display: block; margin: 0 auto 12px auto;" />
+                    <img src="https://i.imgur.com/JuRCheh.png" alt="InteliSensor Logo" width="360" height="40" style="display: block; margin: 0 auto 12px auto;" />
                       </td>
                 </tr>
               </table>
