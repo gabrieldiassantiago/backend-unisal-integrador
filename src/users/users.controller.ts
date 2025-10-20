@@ -4,6 +4,7 @@ import {
   Get,
   HttpStatus,
   Post,
+  Patch,
   UseGuards,
   Request,
   Param,
@@ -17,6 +18,7 @@ import { UserResponseDto } from './dtos/user-response.dto';
 import { UserWithRelationsDto } from './dtos/user-with-relations.dto';
 import { VerifyEmailDto } from './dtos/verify-email.dto';
 import { ResendVerificationDto } from './dtos/resend-verification.dto';
+import { EditUserDto } from './dtos/edit-user.dto';
 import { JwtAuthGuard } from '@src/auth/jwt-auth.guard';
 
 @ApiTags('Usuários')
@@ -133,5 +135,46 @@ export class UsersController {
   @ApiResponse({ status: HttpStatus.OK, type: UserWithRelationsDto })
   async findOne(@Param('id') id: string): Promise<UserWithRelationsDto | null> {
     return this.usersService.getUserProfile(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('me')
+  @ApiOperation({ 
+    summary: 'Editar perfil do usuário autenticado',
+    description: 'Permite ao usuário editar apenas seu próprio perfil. Se o email for alterado, um código de verificação será enviado.'
+  })
+  @ApiBody({ type: EditUserDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Usuário atualizado com sucesso',
+    schema: {
+      example: {
+        message: 'Usuário atualizado com sucesso!',
+        user: {
+          id: 'uuid',
+          name: 'João Silva Atualizado',
+          email: 'joao.novo@email.com',
+          role: 'CAREGIVER',
+          birthDate: '1990-05-15T00:00:00.000Z',
+          gender: 'MALE',
+          hasAccount: true,
+          emailVerified: false,
+          createdAt: '2025-10-16T...'
+        },
+        emailChanged: true
+      }
+    }
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Usuário não encontrado'
+  })
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: 'Email já está em uso'
+  })
+  async updateMyProfile(@Request() req, @Body() dto: EditUserDto) {
+    return this.usersService.editUser(req.user.userId, dto);
   }
 }
