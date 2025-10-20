@@ -12,15 +12,6 @@ export class CreateFallAlertDto {
   serial: string;
 
   @ApiProperty({
-    description: 'Chave de API do dispositivo',
-    example: '1234567890abcdef',
-    type: 'string',
-  })
-  @IsNotEmpty()
-  @IsString()
-  apiKey: string;
-
-  @ApiProperty({
     description: 'Latitude da localização da queda',
     example: -23.5505,
     type: 'number',

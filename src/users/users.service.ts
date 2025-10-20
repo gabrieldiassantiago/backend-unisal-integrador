@@ -1,10 +1,11 @@
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ExistingEmailError } from '@src/errors/existingUserError';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { PrismaService } from '@src/prisma/prisma.service';
 import { EmailService } from '@src/email/email.service';
 import { VerifyEmailDto } from './dtos/verify-email.dto';
+import { EditUserDto } from './dtos/edit-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -348,5 +349,91 @@ export class UsersService {
     });
 
     return user;
+  }
+
+  /**
+   * Edita os dados de um usuário
+   */
+  async editUser(id: string, dto: EditUserDto) {
+    // Verifica se o usuário existe
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    // Verifica se está tentando alterar o email para um que já existe
+    if (dto.email && dto.email !== existingUser.email) {
+      const normalizedEmail = dto.email.toLowerCase().trim();
+      
+      const emailInUse = await this.prisma.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+
+      if (emailInUse) {
+        throw new ConflictException('Este email já está em uso por outro usuário');
+      }
+    }
+
+    // Prepara os dados para atualização
+    const updateData: any = {};
+
+    if (dto.name !== undefined) {
+      updateData.name = dto.name;
+    }
+
+    if (dto.email !== undefined) {
+      updateData.email = dto.email.toLowerCase().trim();
+      // Se mudar email, precisa reverificar
+      updateData.emailVerified = false;
+    }
+
+    if (dto.password !== undefined) {
+      // Hash da nova senha
+      updateData.password = await bcrypt.hash(dto.password, 10);
+    }
+
+    if (dto.birthDate !== undefined) {
+      updateData.birthDate = new Date(dto.birthDate);
+    }
+
+    if (dto.gender !== undefined) {
+      updateData.gender = dto.gender;
+    }
+
+    // Atualiza o usuário
+    const updatedUser = await this.prisma.user.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        birthDate: true,
+        gender: true,
+        hasAccount: true,
+        emailVerified: true,
+        createdAt: true,
+      },
+    });
+
+    // Se o email foi alterado, envia código de verificação
+    if (dto.email && dto.email !== existingUser.email) {
+      await this.generateAndSendVerificationCode(
+        updatedUser.email!,
+        updatedUser.name
+      );
+    }
+
+    return {
+      message: dto.email && dto.email !== existingUser.email 
+        ? 'Usuário atualizado com sucesso! Um código de verificação foi enviado para o novo email.'
+        : 'Usuário atualizado com sucesso!',
+      user: updatedUser,
+      emailChanged: dto.email && dto.email !== existingUser.email,
+    };
   }
 }

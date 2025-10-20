@@ -39,16 +39,7 @@ export class FallAlertsService {
       throw new deviceNotExisting(data.serial);
     }
 
-    console.time('🔍 bcrypt compare');
-    const isValidApiKey = await bcrypt.compare(data.apiKey, device.apiKeyHash);
-    console.timeEnd('🔍 bcrypt compare');
-    
-    if (!isValidApiKey) {
-      throw new apiKeyInvalid(data.apiKey);
-    }
-
     console.time('🔍 Create alert in DB');
-    // ⚡ OTIMIZAÇÃO: Remove createdAt desnecessário (Prisma faz automaticamente)
     const alert = await this.prismaService.fallAlert.create({
       data: {
         deviceId: device.id,
@@ -97,7 +88,6 @@ export class FallAlertsService {
 
 
     console.time('🔍 Queue jobs');
-    // ⚡ OTIMIZAÇÃO: Jobs em paralelo ao invés de sequencial
     await Promise.all([
       this.alertsQueue.add(
         'processInitialAlert',
