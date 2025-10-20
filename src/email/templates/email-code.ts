@@ -15,6 +15,7 @@ export const emailCodeVerificationTemplate = (code: string, userName: string) =>
         <table role="presentation" style="max-width: 600px; width: 100%; border-collapse: collapse; background-color: #FFFFFF; border-radius: 16px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
           
           <!-- Header com Logo -->
+          
           <tr>
             <td style="padding: 40px 40px 20px 40px; text-align: center; background-color: #005BFF; border-radius: 16px 16px 0 0;">
               <table role="presentation" style="width: 100%; border-collapse: collapse;">
