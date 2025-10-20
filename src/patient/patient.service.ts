@@ -138,4 +138,5 @@ export class PatientService {
       age: calcAge(patient.birthDate),
     };
   }
+  
 }
