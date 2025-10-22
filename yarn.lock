@@ -1426,6 +1426,24 @@
     "@eslint/core" "^0.15.1"
     levn "^0.4.1"
 
+"@googlemaps/google-maps-services-js@^3.4.2":
+  version "3.4.2"
+  resolved "https://registry.npmjs.org/@googlemaps/google-maps-services-js/-/google-maps-services-js-3.4.2.tgz"
+  integrity sha512-QjxiJSt8woyPaaQIUUDNL1nRfCEXTiv8KfJSNq/YzKEUVXABT75GLG+Zo267UwOcq70n8OsZbaro5VrY962mJg==
+  dependencies:
+    "@googlemaps/url-signature" "^1.0.4"
+    agentkeepalive "^4.1.0"
+    axios "^1.5.1"
+    query-string "<8.x"
+    retry-axios "<3.x"
+
+"@googlemaps/url-signature@^1.0.4":
+  version "1.0.40"
+  resolved "https://registry.npmjs.org/@googlemaps/url-signature/-/url-signature-1.0.40.tgz"
+  integrity sha512-Gme3JxGZWQ4NVpATajSpS2/inQzhUxRvr/FK6IFpcC7AHOAmx8blI0y1/Qi2jqil+WoQ3TkEqq/MaKVtuV68RQ==
+  dependencies:
+    crypto-js "^4.2.0"
+
 "@hapi/boom@^10.0.1":
   version "10.0.1"
   resolved "https://registry.npmjs.org/@hapi/boom/-/boom-10.0.1.tgz"
@@ -3696,6 +3714,13 @@ agent-base@6:
   dependencies:
     debug "4"
 
+agentkeepalive@^4.1.0:
+  version "4.6.0"
+  resolved "https://registry.npmjs.org/agentkeepalive/-/agentkeepalive-4.6.0.tgz"
+  integrity sha512-kja8j7PjmncONqaTsB8fQ+wE2mSU2DJ9D4XKoJ5PFWIdRMa6SLSN1ff4mOr4jCbfRSsxR4keIiySJU0N9T5hIQ==
+  dependencies:
+    humanize-ms "^1.2.1"
+
 ajv-formats@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/ajv-formats/-/ajv-formats-2.1.1.tgz"
@@ -3925,14 +3950,7 @@ atomic-sleep@^1.0.0:
   resolved "https://registry.npmjs.org/atomic-sleep/-/atomic-sleep-1.0.0.tgz"
   integrity sha512-kNOjDqAh7px0XWNI+4QbzoiR/nTkHAWNud2uvnJquD1/x5a7EQZMJT0AczqK0Qn67oY/TTQ1LbUKajZpp3I9tQ==
 
-axios@^0.24.0:
-  version "0.24.0"
-  resolved "https://registry.npmjs.org/axios/-/axios-0.24.0.tgz"
-  integrity sha512-Q6cWsys88HoPgAaFAVUb0WpPk0O8iTeisR9IMqy9G8AbO4NlpVknrnQS03zzF9PGAWgO3cgletO3VjV/P7VztA==
-  dependencies:
-    follow-redirects "^1.14.4"
-
-axios@^1.11.0, axios@^1.12.1, axios@^1.12.2, axios@^1.6.0:
+axios@*, axios@^1.11.0, axios@^1.12.1, axios@^1.12.2, axios@^1.5.1, axios@^1.6.0:
   version "1.12.2"
   resolved "https://registry.npmjs.org/axios/-/axios-1.12.2.tgz"
   integrity sha512-vMJzPewAlRyOgxV2dU0Cuz2O8zzzx9VYtbJOaBgXFeLc4IV/Eg50n4LowmehOOR61S8ZMpc2K5Sa7g6A4jfkUw==
@@ -3940,6 +3958,13 @@ axios@^1.11.0, axios@^1.12.1, axios@^1.12.2, axios@^1.6.0:
     follow-redirects "^1.15.6"
     form-data "^4.0.4"
     proxy-from-env "^1.1.0"
+
+axios@^0.24.0:
+  version "0.24.0"
+  resolved "https://registry.npmjs.org/axios/-/axios-0.24.0.tgz"
+  integrity sha512-Q6cWsys88HoPgAaFAVUb0WpPk0O8iTeisR9IMqy9G8AbO4NlpVknrnQS03zzF9PGAWgO3cgletO3VjV/P7VztA==
+  dependencies:
+    follow-redirects "^1.14.4"
 
 b4a@^1.6.4:
   version "1.6.7"
@@ -4791,6 +4816,11 @@ cross-spawn@^7.0.0, cross-spawn@^7.0.3, cross-spawn@^7.0.6:
     shebang-command "^2.0.0"
     which "^2.0.1"
 
+crypto-js@^4.2.0:
+  version "4.2.0"
+  resolved "https://registry.npmjs.org/crypto-js/-/crypto-js-4.2.0.tgz"
+  integrity sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==
+
 curve25519-js@^0.0.4:
   version "0.0.4"
   resolved "https://registry.npmjs.org/curve25519-js/-/curve25519-js-0.0.4.tgz"
@@ -4866,6 +4896,11 @@ decamelize@^1.2.0:
   version "1.2.0"
   resolved "https://registry.npmjs.org/decamelize/-/decamelize-1.2.0.tgz"
   integrity sha512-z2S+W9X73hAUUki+N+9Za2lBlun89zigOyGrsax+KUQ6wKW4ZoWpEYBkGhQjwAjjDCkWxhY0VKEhk8wzY7F5cA==
+
+decode-uri-component@^0.2.2:
+  version "0.2.2"
+  resolved "https://registry.npmjs.org/decode-uri-component/-/decode-uri-component-0.2.2.tgz"
+  integrity sha512-FqUYQ+8o158GyGTrMFJms9qh3CqTKvAqgqsTnkLI8sKu0028orqBhxNMFkFen0zGyg6epACD32pjVk58ngIErQ==
 
 decompress-response@^6.0.0:
   version "6.0.0"
@@ -5659,6 +5694,11 @@ fill-range@^7.1.1:
   dependencies:
     to-regex-range "^5.0.1"
 
+filter-obj@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.npmjs.org/filter-obj/-/filter-obj-1.1.0.tgz"
+  integrity sha512-8rXg1ZnX7xzy2NGDVkBVaAy+lSlPNwad13BtgSlLuxfIslyt5Vg64U7tFcCt4WS1R0hvtnQybT/IyCkGZ3DpXQ==
+
 finalhandler@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/finalhandler/-/finalhandler-2.0.0.tgz"
@@ -6138,6 +6178,13 @@ human-signals@^2.1.0:
   version "2.1.0"
   resolved "https://registry.npmjs.org/human-signals/-/human-signals-2.1.0.tgz"
   integrity sha512-B4FFZ6q/T2jhhksgkbEW3HBvWIfDW85snkQgawt07S7J5QXTk6BkNV+0yAeZrM5QpMAdYlocGoljn0sJ/WQkFw==
+
+humanize-ms@^1.2.1:
+  version "1.2.1"
+  resolved "https://registry.npmjs.org/humanize-ms/-/humanize-ms-1.2.1.tgz"
+  integrity sha512-Fl70vYtsAFb/C06PTS9dZBo7ihau+Tu/DNCk/OyHhea07S+aeMWpFFkUaXRa8fI+ScZbEI8dfSxwY7gxZ9SAVQ==
+  dependencies:
+    ms "^2.0.0"
 
 iconv-lite@^0.4.24, iconv-lite@0.4.24:
   version "0.4.24"
@@ -7427,7 +7474,7 @@ mkdirp@^1.0.4:
   resolved "https://registry.npmjs.org/mkdirp/-/mkdirp-1.0.4.tgz"
   integrity sha512-vVqVZQyf3WLx2Shd0qJ9xuvqgAyKPLAiqITEtqW0oIUjzo3PePDd6fW9iFz30ef7Ysp/oiWqbhszeGWW2T6Gzw==
 
-ms@^2.1.1, ms@2.1.2:
+ms@^2.0.0, ms@^2.1.1, ms@2.1.2:
   version "2.1.2"
   resolved "https://registry.npmjs.org/ms/-/ms-2.1.2.tgz"
   integrity sha512-sGkPx+VjMtmA6MX27oA4FBFELFCZZ4S4XqeGOXCv68tT+jb3vk/RyaKWP0PTKyWtmLSM0b+adUTEvbs1PEaH2w==
@@ -8306,6 +8353,16 @@ qs@^6.11.0, qs@^6.9.4, qs@6.13.0:
   dependencies:
     side-channel "^1.0.6"
 
+query-string@<8.x:
+  version "7.1.3"
+  resolved "https://registry.npmjs.org/query-string/-/query-string-7.1.3.tgz"
+  integrity sha512-hh2WYhq4fi8+b+/2Kg9CEge4fDPvHS534aOOvOZeQ3+Vf2mCFsaFBYj0i+iXcAq6I9Vzp5fjMFBlONvayDC1qg==
+  dependencies:
+    decode-uri-component "^0.2.2"
+    filter-obj "^1.1.0"
+    split-on-first "^1.0.0"
+    strict-uri-encode "^2.0.0"
+
 queue-microtask@^1.2.2:
   version "1.2.3"
   resolved "https://registry.npmjs.org/queue-microtask/-/queue-microtask-1.2.3.tgz"
@@ -8586,6 +8643,11 @@ restore-cursor@^3.1.0:
   dependencies:
     onetime "^5.1.0"
     signal-exit "^3.0.2"
+
+retry-axios@<3.x:
+  version "2.6.0"
+  resolved "https://registry.npmjs.org/retry-axios/-/retry-axios-2.6.0.tgz"
+  integrity sha512-pOLi+Gdll3JekwuFjXO3fTq+L9lzMQGcSq7M5gIjExcl3Gu1hd4XXuf5o3+LuSBsaULQH7DiNbsqPd1chVpQGQ==
 
 reusify@^1.0.4:
   version "1.0.4"
@@ -8984,6 +9046,11 @@ spdx-license-ids@^3.0.0:
   resolved "https://registry.npmjs.org/spdx-license-ids/-/spdx-license-ids-3.0.21.tgz"
   integrity sha512-Bvg/8F5XephndSK3JffaRqdT+gyhfqIPwDHpX80tJrF8QQRYMo8sNMeaZ2Dp5+jhwKnUmIOyFFQfHRkjJm5nXg==
 
+split-on-first@^1.0.0:
+  version "1.1.0"
+  resolved "https://registry.npmjs.org/split-on-first/-/split-on-first-1.1.0.tgz"
+  integrity sha512-43ZssAJaMusuKWL8sKUBQXHWOpq8d6CfN/u1p4gUzfJkM05C8rxTmYrkIPTXapZpORA6LkkzcUulJ8FqA7Uudw==
+
 split2@^4.0.0:
   version "4.2.0"
   resolved "https://registry.npmjs.org/split2/-/split2-4.2.0.tgz"
@@ -9044,6 +9111,11 @@ streamx@^2.15.0, streamx@^2.21.0:
     text-decoder "^1.1.0"
   optionalDependencies:
     bare-events "^2.2.0"
+
+strict-uri-encode@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.npmjs.org/strict-uri-encode/-/strict-uri-encode-2.0.0.tgz"
+  integrity sha512-QwiXZgpRcKkhTj2Scnn++4PKtWsH0kpzZ62L2R6c/LUVYv7hVnZqcg2+sMuT6R7Jusu1vviK/MFsu6kNJfWlEQ==
 
 string_decoder@^1.1.1, string_decoder@~1.1.1:
   version "1.1.1"
