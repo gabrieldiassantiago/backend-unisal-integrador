@@ -124,7 +124,7 @@ export class FallAlertsService {
     return payload;
   }
 
-  // 🆕 Marcar como falso alerta
+  //  Marcar como falso alerta
   async markFalseAlarm(alertId: string, caregiverId: string) {
     const alert = await this.prismaService.fallAlert.findUnique({
       where: { id: alertId },
