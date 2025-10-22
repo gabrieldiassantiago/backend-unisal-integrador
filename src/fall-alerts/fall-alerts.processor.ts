@@ -49,7 +49,7 @@ export class FallAlertsProcessor extends WorkerHost {
       }
     }
 
-    // 🆕 Job para pedir confirmação após 2 minutos
+    //  Job para pedir confirmação após 2 minutos
     if (job.name === 'requestConfirmation') {
       const { alertId, caregiverId } = job.data;
       console.log(`[BullMQ] Solicitando confirmação para alerta ${alertId}`);
@@ -85,7 +85,7 @@ export class FallAlertsProcessor extends WorkerHost {
       });
     }
     
-    // 🆕 Job para processar alerta inicial (WhatsApp + Chamada para contato prioritário)
+    //  Job para processar alerta inicial (WhatsApp + Chamada para contato prioritário)
     if (job.name === 'processInitialAlert') {
       const { alertId, patientId, latitude, longitude } = job.data;
       console.log(`[BullMQ] Processando alerta inicial para alerta ${alertId}`);
@@ -163,7 +163,7 @@ export class FallAlertsProcessor extends WorkerHost {
       }
     }
     
-    // 🆕 Job para notificar contatos secundários após timeout do contato prioritário
+    //  Job para notificar contatos secundários após timeout do contato prioritário
     if (job.name === 'notifySecondaryContacts') {
       const { alertId, patientId, latitude, longitude } = job.data;
       console.log(`[BullMQ] Verificando se é necessário notificar contatos secundários para alerta ${alertId}`);
@@ -240,7 +240,7 @@ export class FallAlertsProcessor extends WorkerHost {
       }
     }
     
-    // 🆕 Job para monitorar chamadas
+    //  Job para monitorar chamadas
     if (job.name === 'monitorCall') {
       const { alertId, callSid, contactId, contactName, patientName } = job.data;
       console.log(`[BullMQ] Iniciando monitoramento da chamada ${callSid} para ${contactName}`);
@@ -358,5 +358,6 @@ export class FallAlertsProcessor extends WorkerHost {
         console.error(`[BullMQ] Erro no monitoramento da chamada ${callSid}:`, error);
       }
     }
+
   }
 }
