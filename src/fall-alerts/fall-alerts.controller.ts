@@ -50,7 +50,12 @@ async getAlerts(@Query('patientId') patientId: string) {
   async markFalseAlarm(
     @Param('id') id: string,
     @Body() body: { caregiverId: string }
+
+
   ) {
+     if (!body.caregiverId) {
+      throw new BadRequestException('O ID do cuidador é obrigatório');
+    }
     return this.fallAlertsService.markFalseAlarm(id, body.caregiverId);
   }
 
