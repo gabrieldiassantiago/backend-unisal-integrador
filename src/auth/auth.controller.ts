@@ -1,9 +1,10 @@
-import { Controller, Post, Patch, Body, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Patch, Body, UnauthorizedException, UseGuards, HttpCode, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dtos/login.dto';
 import { LoginResponseDto } from './dtos/login-response.dto';
 import { FamilyMemberLoginDto } from './dtos/family-member-login.dto';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @ApiTags('Autenticação')
 @Controller('auth')
@@ -134,4 +135,14 @@ export class AuthController {
     return this.authService.resetPassword(resetPasswordDto.email, resetPasswordDto.password);
   }
   */
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  @HttpCode(200)
+  async logout(@Request() req) {
+    
+    await this.authService.logout(req.user.userId);
+    
+    return { message: 'Logout realizado com sucesso' };
+  }
 }
