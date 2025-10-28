@@ -29,6 +29,7 @@ model User {
   emailVerified   Boolean  @default(true)  // 🆕 Sempre true, pois só cria após verificar
   createdAt       DateTime @default(now())
   gender          Gender?
+  currentSessionId String?
 
   // relações
   devices       Device[]
