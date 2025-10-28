@@ -1,5 +1,5 @@
 export const emailCodeVerificationTemplate = (code: string, userName: string) => `
- <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+  <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
@@ -21,13 +21,9 @@ export const emailCodeVerificationTemplate = (code: string, userName: string) =>
               <table role="presentation" style="width: 100%; border-collapse: collapse;">
                 <tr>
                   <td align="center">
-                    <!-- Ícone de Email -->
-                    <div style="width: 64px; height: 64px; margin: 0 auto 16px; background-color: rgba(255, 255, 255, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                      <div style="font-size: 32px; line-height: 64px;">✉️</div>
-                    </div>
-                    <h1 style="margin: 0; color: #FFFFFF; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">InteliSensor</h1>
-                    <p style="margin: 8px 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 500;">Sistema de Monitoramento de Quedas</p>
-                  </td>
+                    
+                    <img src="https://i.imgur.com/JuRCheh.png" alt="InteliSensor Logo" width="360" height="40" style="display: block; margin: 0 auto 12px auto;" />
+                      </td>
                 </tr>
               </table>
             </td>
@@ -47,12 +43,12 @@ export const emailCodeVerificationTemplate = (code: string, userName: string) =>
               </p>
               
               <!-- Código de Verificação Box -->
-              <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 32px 0;">
+              <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 32px 0; border-radius: 16px;">
                 <tr>
                   <td align="center" style="padding: 0;">
-                    <table role="presentation" style="border-collapse: collapse; background: linear-gradient(135deg, #F0F7FF 0%, #E0F2FE 100%); border-radius: 12px; border: 2px solid #005BFF;">
+                    <table role="presentation" style="border-collapse: collapse; background: linear-gradient(135deg, #F0F7FF 0%, #E0F2FE 100%); border-radius: 16px">
                       <tr>
-                        <td style="padding: 32px 24px; text-align: center;">
+                        <td style="padding: 32px 24px; text-align: center; border-radius: 16px;">
                           <p style="margin: 0 0 12px 0; color: #64748B; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;">
                             CÓDIGO DE VERIFICAÇÃO
                           </p>
@@ -62,6 +58,9 @@ export const emailCodeVerificationTemplate = (code: string, userName: string) =>
                           <p style="margin: 12px 0 0 0; color: #94A3B8; font-size: 13px;">
                             Digite este código no aplicativo
                           </p>
+                          <button onclick="copyCode()" style="margin-top: 16px; padding: 10px 20px; background-color: #005BFF; color: #FFFFFF; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                            Copiar Código
+                          </button>
                         </td>
                       </tr>
                     </table>
@@ -75,20 +74,7 @@ export const emailCodeVerificationTemplate = (code: string, userName: string) =>
                   ⏱️ <strong>Atenção:</strong> Este código expira em <strong>10 minutos</strong>. Se não solicitou esta verificação, ignore este email.
                 </p>
               </div>
-              
-              <!-- Call to Action -->
-              <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 32px 0;">
-                <tr>
-                  <td align="center">
-                    <p style="margin: 0 0 16px 0; color: #64748B; font-size: 15px;">
-                      Problemas para inserir o código?
-                    </p>
-                    <a href="#" style="display: inline-block; padding: 14px 32px; background-color: #005BFF; color: #FFFFFF; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 15px; letter-spacing: 0.3px;">
-                      Abrir no Navegador
-                    </a>
-                  </td>
-                </tr>
-              </table>
+        
               
               <!-- Dica de Segurança -->
               <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #E2E8F0;">
@@ -147,4 +133,15 @@ export const emailCodeVerificationTemplate = (code: string, userName: string) =>
   </table>
 </body>
 </html>
+
+<script>
+  function copyCode() {
+    const code = "${code}";
+    navigator.clipboard.writeText(code).then(() => {
+      alert("Código copiado para a área de transferência!");
+    }).catch(err => {
+      console.error("Erro ao copiar o código: ", err);
+    });
+  }
+</script>
     `;
