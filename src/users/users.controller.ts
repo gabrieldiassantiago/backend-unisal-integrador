@@ -117,7 +117,6 @@ export class UsersController {
     return this.usersService.getAllUsers();
   }
 
-  // IMPORTANTE: "me" vem antes de ":id" para não conflitar
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Get('me')

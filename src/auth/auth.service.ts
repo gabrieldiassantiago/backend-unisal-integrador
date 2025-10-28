@@ -2,6 +2,8 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {PrismaService} from '../prisma/prisma.service'
 import * as bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid'; 
+
 
 @Injectable()
 export class AuthService {
@@ -33,12 +35,23 @@ export class AuthService {
 
 
   async login(user: any) {
+
+    const sessionId = uuidv4();
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { currentSessionId: sessionId },
+    });
+  
+
     let payload: any = { 
       sub: user.id, 
       email: user.email, 
       role: user.role, 
-      name: user.name 
+      name: user.name,
+      sessionId: sessionId,
     };
+
 
     // Se é familiar, incluir informações de acesso aos pacientes
     if (user.role?.toString() === 'FAMILY_MEMBER') {
@@ -102,4 +115,11 @@ export class AuthService {
     }
   } 
   */
+ 
+  async logout(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { currentSessionId: null },
+    })
+  }
 }

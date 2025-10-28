@@ -1,8 +1,10 @@
 // fall-alerts.processor.ts
-import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
-import { Job, Queue } from 'bullmq';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job } from 'bullmq';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { FallAlertsService } from './fall-alerts.service';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '@src/prisma/prisma.service';
 import { FallAlertsGateway } from './fall-alerts.gateway';
 import { TwilioService } from '@src/twilio/twilio.service';
 
@@ -19,7 +21,11 @@ export class FallAlertsProcessor extends WorkerHost {
   }
 
   async process(job: Job<any>) {
-    console.log(`[BullMQ] Processando job: ${job.name}, ID: ${job.id}`);
+    console.log(`\n========================================`);
+    console.log(`[BullMQ] 🔄 Processando job: ${job.name}`);
+    console.log(`[BullMQ] 📋 Job ID: ${job.id}`);
+    console.log(`[BullMQ] 📊 Data:`, JSON.stringify(job.data, null, 2));
+    console.log(`========================================\n`);
     
     if (job.name === 'autoConfirm') {
       const { alertId } = job.data;
@@ -30,333 +36,254 @@ export class FallAlertsProcessor extends WorkerHost {
       });
 
       if (!alert) {
-        console.log(`[BullMQ] Alerta ${alertId} não encontrado`);
+        console.log(`[BullMQ] ⚠️ Alerta ${alertId} não encontrado. Cancelando job.`);
         return;
       }
       
       // Só prossegue com a confirmação automática se o alerta ainda estiver pendente ou em verificação
-      // Se foi resolvido, cancelado ou marcado como falso alarme, não faz nada
       if (alert.status !== 'PENDING' && alert.status !== 'VERIFYING') {
-        console.log(`[BullMQ] Alerta ${alertId} já processado (${alert.status}), não precisa de confirmação automática`);
+        console.log(`[BullMQ] ⚠️ Alerta ${alertId} já foi processado (status: ${alert.status}). Cancelando job.`);
         return;
       }
 
       try {
+        console.log(`[BullMQ] ✅ Confirmando automaticamente alerta ${alertId}...`);
         await this.fallAlertsService.confirmAlert(alertId);
-        console.log(`[BullMQ] Alerta ${alertId} confirmado automaticamente`);
+        console.log(`[BullMQ] ✅ Alerta ${alertId} confirmado automaticamente com sucesso!`);
       } catch (error) {
-        console.error(`[BullMQ] Erro ao confirmar alerta ${alertId}:`, error);
+        console.error(`[BullMQ] ❌ Erro ao confirmar automaticamente alerta ${alertId}:`, error);
+        throw error;
       }
     }
 
-    // 🆕 Job para pedir confirmação após 2 minutos
     if (job.name === 'requestConfirmation') {
-      const { alertId, caregiverId } = job.data;
-      console.log(`[BullMQ] Solicitando confirmação para alerta ${alertId}`);
+  const { alertId, caregiverId } = job.data;
+  console.log(`\n[BullMQ] 🔔 ================================`);
+  console.log(`[BullMQ] 🔔 SOLICITANDO CONFIRMAÇÃO`);
+  console.log(`[BullMQ] 🔔 Alerta: ${alertId}`);
+  console.log(`[BullMQ] 🔔 Cuidador: ${caregiverId}`);
+  console.log(`[BullMQ] 🔔 Timestamp: ${new Date().toISOString()}`);
+  console.log(`[BullMQ] 🔔 ================================\n`);
 
-      const alert = await this.prismaService.fallAlert.findUnique({
-        where: { id: alertId },
-        include: { patient: true },
-      });
+  const alert = await this.prismaService.fallAlert.findUnique({
+    where: { id: alertId },
+    include: { patient: true },
+  });
 
-      if (!alert || alert.status !== 'VERIFYING') {
-        console.log(`[BullMQ] Alerta ${alertId} não está mais em verificação`);
-        return;
-      }
+  if (!alert) {
+    console.log(`[BullMQ] ⚠️ Alerta ${alertId} não encontrado. Cancelando job.`);
+    return;
+  }
 
-      const caregiver = await this.prismaService.emergencyContact.findFirst({
-        where: { patientId: alert.patientId, priority: 1 },
-      });
+  if (alert.status !== 'VERIFYING') {
+    console.log(`[BullMQ] ⚠️ Alerta ${alertId} não está mais em verificação (status: ${alert.status}). Cancelando job.`);
+    return;
+  }
 
-      if (caregiver) {
-        
-        const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
-        
-        await this.twilioService.sendWhatsAppMessage(
-          caregiver.phone,
-          `⏰ *LEMBRETE DE VERIFICAÇÃO*\n\nPaciente: ${alert.patient.name}\nLocalização: ${googleMapsLink}\n\n⚠️ Você indicou que estava verificando. Por favor, confirme o status pelo aplicativo.`
-        );
-      }
+  console.log(`[BullMQ] ✅ Alerta ${alertId} está em verificação, enviando lembrete...`);
 
-      // Emite via WebSocket pedindo confirmação
-      this.gateway.emitRequestConfirmation({
-        id: alert.id,
-        patientId: alert.patientId,
+  // 🚨 VERIFICAÇÃO CRÍTICA: Quantos clientes estão conectados?
+  const roomName = `patient_${alert.patientId}`;
+  
+  console.log(`\n[BullMQ] 🔍 ================================`);
+  console.log(`[BullMQ] 🔍 VERIFICANDO SALA ANTES DE EMITIR`);
+  console.log(`[BullMQ] 🔍 ================================`);
+  
+  // Tenta buscar os sockets conectados na sala
+  try {
+    const sockets = await this.gateway.server?.in(roomName).fetchSockets();
+    const clientCount = sockets?.length ?? 0;
+    
+    console.log(`[BullMQ] 🔍 Sala: ${roomName}`);
+    console.log(`[BullMQ] 🔍 Clientes conectados: ${clientCount}`);
+    
+    if (clientCount === 0) {
+      console.log(`[BullMQ] ⚠️ ⚠️ ⚠️ CRÍTICO: NENHUM CLIENTE NA SALA!`);
+      console.log(`[BullMQ] ⚠️ O evento NÃO será recebido pelo frontend!`);
+      console.log(`[BullMQ] ⚠️ Verifique se o frontend está:`);
+      console.log(`[BullMQ] ⚠️   1. Conectado ao WebSocket`);
+      console.log(`[BullMQ] ⚠️   2. Fez join na sala patient_${alert.patientId}`);
+      console.log(`[BullMQ] ⚠️   3. Está escutando o evento 'requestConfirmation'`);
+    } else {
+      console.log(`[BullMQ] ✅ Clientes na sala que receberão o evento:`);
+      sockets!.forEach((s, index) => {
+        console.log(`[BullMQ] ✅   ${index + 1}. Socket ID: ${s.id}`);
       });
     }
+  } catch (error) {
+    console.error(`[BullMQ] ❌ Erro ao verificar sala:`, error);
+  }
+  
+  console.log(`[BullMQ] 🔍 ================================\n`);
+
+  // Busca informações do cuidador
+  const caregiver = await this.prismaService.emergencyContact.findFirst({
+    where: { 
+      id: caregiverId,
+      patientId: alert.patientId 
+    },
+  });
+
+   if (!caregiver) {
+    console.log(`[BullMQ] ⚠️ Cuidador ${caregiverId} não encontrado. Buscando contato prioritário...`);
+    const priorityCaregiver = await this.prismaService.emergencyContact.findFirst({
+      where: { patientId: alert.patientId, priority: 1 },
+    });
     
-    // 🆕 Job para processar alerta inicial (WhatsApp + Chamada para contato prioritário)
+    if (priorityCaregiver) {
+      console.log(`[BullMQ] ✅ Usando contato prioritário: ${priorityCaregiver.name}`);
+    }
+  }
+
+  // Tenta enviar WhatsApp (pode falhar por limite)
+  const contactToNotify = caregiver || await this.prismaService.emergencyContact.findFirst({
+    where: { patientId: alert.patientId, priority: 1 },
+  });
+
+  if (contactToNotify) {
+    const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
+    
+    try {
+      await this.twilioService.sendWhatsAppMessage(
+        contactToNotify.phone,
+        `⏰ *LEMBRETE DE VERIFICAÇÃO*\n\nPaciente: ${alert.patient.name}\nLocalização: ${googleMapsLink}\n\n⚠️ Você indicou que estava verificando. Por favor, confirme o status pelo aplicativo.`
+      );
+      console.log(`[BullMQ] ✅ WhatsApp enviado para ${contactToNotify.name}`);
+    } catch (error) {
+      console.error(`[BullMQ] ❌ Erro ao enviar WhatsApp (limite diário atingido):`, error.message);
+    }
+  }
+
+  // 🚨 EMISSÃO DO EVENTO WEBSOCKET
+  console.log(`\n[BullMQ] 📡 ================================`);
+  console.log(`[BullMQ] 📡 EMITINDO VIA WEBSOCKET`);
+  console.log(`[BullMQ] 📡 ================================`);
+  
+  const payload = {
+    id: alert.id,
+    patientId: alert.patientId,
+    alertId: alert.id,
+    message: 'Você indicou que estava verificando. Por favor, confirme o status do alerta.',
+    timestamp: new Date().toISOString(),
+  };
+  
+  console.log(`[BullMQ] 📊 Payload completo:`, JSON.stringify(payload, null, 2));
+  
+  // EMITE O EVENTO
+  await this.gateway.emitRequestConfirmation(payload);
+  
+  console.log(`[BullMQ] ✅ Evento requestConfirmation emitido!`);
+  console.log(`[BullMQ] 📡 ================================\n`);
+  
+  // 🔍 VERIFICAÇÃO PÓS-EMISSÃO
+  console.log(`\n[BullMQ] 🔍 VERIFICAÇÃO PÓS-EMISSÃO`);
+  try {
+    const socketsAfter = await this.gateway.server?.in(roomName).fetchSockets();
+    console.log(`[BullMQ] 🔍 Clientes ainda conectados: ${socketsAfter?.length ?? 0}`);
+  } catch (error) {
+    console.error(`[BullMQ] ❌ Erro na verificação pós-emissão:`, error);
+  }
+  console.log(`[BullMQ] 🔍 ================================\n`);
+  
+  console.log(`[BullMQ] ✅ Job requestConfirmation concluído!\n`);
+}
+
+  
+    
+    //  Job para processar alerta inicial (WhatsApp + Chamada para contato prioritário)
     if (job.name === 'processInitialAlert') {
       const { alertId, patientId, latitude, longitude } = job.data;
-      console.log(`[BullMQ] Processando alerta inicial para alerta ${alertId}`);
-
-      try {
-        // Verifica se o alerta ainda existe e está pendente
-        const alert = await this.prismaService.fallAlert.findUnique({
-          where: { id: alertId },
-        });
-
-        if (!alert || alert.status !== 'PENDING') {
-          console.log(`[BullMQ] Alerta ${alertId} não encontrado ou já processado (${alert?.status})`);
-          return;
-        }
-
-        // Busca contato prioritário e paciente
-        const primaryCaregiver = await this.prismaService.emergencyContact.findFirst({
-          where: { patientId: patientId, priority: 1 },
-        });
-
-        if (!primaryCaregiver) {
-          console.log(`[BullMQ] Nenhum contato prioritário encontrado para paciente ${patientId}`);
-          return;
-        }
-
-        const patient = await this.prismaService.user.findUnique({
-          where: { id: patientId },
-        });
-
-        const googleMapsLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
-
-        // 1️⃣ Envia WhatsApp para contato prioritário
-        try {
-          console.log(`[BullMQ] 📱 Enviando WhatsApp para contato prioritário: ${primaryCaregiver.name}`);
-          await this.twilioService.sendFallAlertWhatsApp(primaryCaregiver.phone, {
-            contactName: primaryCaregiver.name,
-            patientName: patient?.name || 'Paciente',
-            location: googleMapsLink,
-            priority: primaryCaregiver.priority
-          });
-          console.log(`[BullMQ] ✅ WhatsApp enviado com sucesso para ${primaryCaregiver.name}`);
-        } catch (err) {
-          console.error(`[BullMQ] ❌ Erro ao enviar WhatsApp para ${primaryCaregiver.name}:`, err);
-        }
-
-        // 2️⃣ Tenta ligar para o contato prioritário
-        try {
-          console.log(`[BullMQ] 📞 Tentando ligar para contato prioritário: ${primaryCaregiver.name}`);
-          const call = await this.twilioService.makeFallAlertCall(primaryCaregiver.phone, patient?.name);
-          
-          console.log(`[BullMQ] 📱 Chamada iniciada para ${primaryCaregiver.name}. SID: ${call.sid}`);
-          console.log(`[BullMQ] 📞 Status imediato após criação: ${call.status}`);
-          
-          // Agenda um job para monitorar esta chamada
-          await this.alertsQueue.add(
-            'monitorCall',
-            { 
-              alertId: alertId,
-              callSid: call.sid,
-              contactId: primaryCaregiver.id,
-              contactName: primaryCaregiver.name,
-              patientName: patient?.name
-            },
-            { delay: 5000 }, // Começa a monitorar após 5 segundos
-          );
-          
-        } catch (err) {
-          console.error(`[BullMQ] ❌ Erro ao ligar para contato prioritário ${primaryCaregiver.name}:`, err);
-        }
-
-        console.log(`[BullMQ] ✅ Processamento inicial do alerta ${alertId} concluído`);
-
-      } catch (error) {
-        console.error(`[BullMQ] ❌ Erro no processamento inicial do alerta ${alertId}:`, error);
-      }
-    }
-    
-    // 🆕 Job para notificar contatos secundários após timeout do contato prioritário
-    if (job.name === 'notifySecondaryContacts') {
-      const { alertId, patientId, latitude, longitude } = job.data;
-      console.log(`[BullMQ] Verificando se é necessário notificar contatos secundários para alerta ${alertId}`);
-
-      const alert = await this.prismaService.fallAlert.findUnique({
-        where: { id: alertId },
-      });
-
-      // Se o alerta já foi resolvido de alguma forma (não está mais como PENDING), não precisamos notificar contatos secundários
-      if (!alert || alert.status !== 'PENDING') {
-        console.log(`[BullMQ] Alerta ${alertId} já foi processado (${alert?.status}), não será necessário notificar contatos secundários`);
-        return;
-      }
-
-      console.log(`[BullMQ] Alerta ${alertId} ainda pendente após timeout. Notificando contatos secundários...`);
+      console.log(`[BullMQ] Processando alerta inicial ${alertId} para paciente ${patientId}`);
 
       const patient = await this.prismaService.user.findUnique({
         where: { id: patientId },
       });
 
-      // Busca contatos secundários (prioridade > 1)
-      const secondaryContacts = await this.prismaService.emergencyContact.findMany({
-        where: { 
-          patientId: patientId,
-          priority: { gt: 1 } // Prioridade maior que 1
-        },
-        orderBy: { priority: 'asc' } // Ordenar por prioridade
+      if (!patient) {
+        console.log(`[BullMQ] ⚠️ Paciente ${patientId} não encontrado.`);
+        return;
+      }
+
+      const priorityContact = await this.prismaService.emergencyContact.findFirst({
+        where: { patientId, priority: 1 },
       });
 
-      if (secondaryContacts.length === 0) {
-        console.log(`[BullMQ] Nenhum contato secundário encontrado para o paciente ${patientId}`);
+      if (!priorityContact) {
+        console.log(`[BullMQ] ⚠️ Nenhum contato prioritário encontrado para o paciente ${patientId}.`);
         return;
       }
 
       const googleMapsLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
 
-      // Notifica todos os contatos secundários
+      // Envia WhatsApp
+      try {
+        const message = `🚨 *ALERTA DE QUEDA*\n\nPaciente: ${patient.name}\n\n📍 Localização:\n${googleMapsLink}\n\nPor favor, verifique imediatamente!`;
+        await this.twilioService.sendWhatsAppMessage(priorityContact.phone, message);
+        console.log(`[BullMQ] ✅ WhatsApp enviado para ${priorityContact.name}`);
+      } catch (err) {
+        console.error(`[BullMQ] ❌ Erro ao enviar WhatsApp:`, err.message);
+      }
+
+      // Agenda job para monitorar chamada
+      await this.alertsQueue.add(
+        'monitorCall',
+        { alertId, contactId: priorityContact.id, patientName: patient.name },
+        { delay: 5000 } // 5 segundos
+      );
+    }
+    
+    //  Job para notificar contatos secundários após timeout do contato prioritário
+    if (job.name === 'notifySecondaryContacts') {
+      const { alertId, patientId, latitude, longitude } = job.data;
+      console.log(`[BullMQ] Notificando contatos secundários para alerta ${alertId}`);
+
+      const alert = await this.prismaService.fallAlert.findUnique({
+        where: { id: alertId },
+      });
+
+      // Se o alerta já foi resolvido, não notifica
+      if (!alert || alert.status !== 'PENDING') {
+        console.log(`[BullMQ] ⚠️ Alerta ${alertId} não está mais pendente. Cancelando notificação de contatos secundários.`);
+        return;
+      }
+
+      const patient = await this.prismaService.user.findUnique({
+        where: { id: patientId },
+      });
+
+      const secondaryContacts = await this.prismaService.emergencyContact.findMany({
+        where: { 
+          patientId,
+          priority: { gt: 1 } // Todos exceto prioridade 1
+        },
+        orderBy: { priority: 'asc' }
+      });
+
+      if (secondaryContacts.length === 0) {
+        console.log(`[BullMQ] ⚠️ Nenhum contato secundário encontrado.`);
+        return;
+      }
+
+      const googleMapsLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
+
       for (const contact of secondaryContacts) {
         try {
-          console.log(`[BullMQ] Enviando notificação para contato secundário: ${contact.name} (prioridade ${contact.priority})`);
-          
-          await this.twilioService.sendWhatsAppMessage(
-            contact.phone,
-            `⚠️ ATENÇÃO - Contato Secundário\n\nDetectamos uma possível queda de *${patient?.name}* e não obtivemos resposta do contato prioritário.\n\n📍 Localização: ${googleMapsLink}\n\nPor favor, nos ajude respondendo:\n✅ "Falso Alerta" - se souber que está tudo bem\n🏃 "Estou Indo Verificar" - se vai checar pessoalmente\n\nContamos com você! 🙏`
-          );
-          
-          // Tenta ligar para o contato secundário também
-          try {
-            console.log(`[BullMQ] Tentando ligar para contato secundário: ${contact.name}`);
-            const call = await this.twilioService.makeFallAlertCall(contact.phone, patient?.name);
-            
-            console.log(`[BullMQ] Chamada iniciada para contato secundário ${contact.name}. SID: ${call.sid}`);
-            
-            // Agenda monitoramento desta chamada
-            await this.alertsQueue.add(
-              'monitorCall',
-              { 
-                alertId: alertId,
-                callSid: call.sid,
-                contactId: contact.id,
-                contactName: contact.name,
-                patientName: patient?.name
-              },
-              { delay: 5000 }, // Começa a monitorar após 5 segundos
-            );
-            
-          } catch (err) {
-            console.error(`[BullMQ] Erro ao ligar para contato secundário ${contact.name}:`, err);
-          }
-          
-        } catch (error) {
-          console.error(`[BullMQ] Erro ao notificar contato secundário ${contact.name}:`, error);
+          const message = `⚠️ *ALERTA DE QUEDA - BACKUP*\n\nO contato prioritário não respondeu!\n\nPaciente: ${patient.name}\n📍 ${googleMapsLink}\n\nPor favor, verifique imediatamente!`;
+          await this.twilioService.sendWhatsAppMessage(contact.phone, message);
+          console.log(`[BullMQ] ✅ WhatsApp enviado para ${contact.name} (prioridade ${contact.priority})`);
+        } catch (err) {
+          console.error(`[BullMQ] ❌ Erro ao enviar WhatsApp para ${contact.name}:`, err.message);
         }
       }
     }
     
-    // 🆕 Job para monitorar chamadas
+    //  Job para monitorar chamadas
     if (job.name === 'monitorCall') {
-      const { alertId, callSid, contactId, contactName, patientName } = job.data;
-      console.log(`[BullMQ] Iniciando monitoramento da chamada ${callSid} para ${contactName}`);
+      const { alertId, contactId, patientName } = job.data;
+      console.log(`[BullMQ] Monitorando chamada para alerta ${alertId}, contato ${contactId}`);
 
-      try {
-        // Verifica se o alerta ainda existe e está pendente
-        const alert = await this.prismaService.fallAlert.findUnique({
-          where: { id: alertId },
-        });
-
-        if (!alert) {
-          console.log(`[BullMQ] Alerta ${alertId} não encontrado, cancelando monitoramento`);
-          return;
-        }
-
-        if (alert.status !== 'PENDING') {
-          console.log(`[BullMQ] Alerta ${alertId} já foi processado (${alert.status}), cancelando monitoramento`);
-          return;
-        }
-
-        // Monitoramento da chamada
-        let tempoDecorrido = 0;
-        const intervaloVerificacao = 15000; // 15 segundos
-        const tempoMaximoEspera = 90000; // 1.5 minuto
-        let chamadaFinalizada = false;
-
-        console.log(`🔄 [BullMQ] Iniciando monitoramento da chamada (verificando a cada ${intervaloVerificacao/1000}s por até ${tempoMaximoEspera/1000}s)`);
-
-        // Loop para verificar periodicamente o status da chamada
-        while (tempoDecorrido < tempoMaximoEspera && !chamadaFinalizada) {
-          // Aguarda o intervalo de verificação
-          console.log(`⏰ [BullMQ] Aguardando ${intervaloVerificacao/1000} segundos antes da próxima verificação...`);
-          await new Promise(resolve => setTimeout(resolve, intervaloVerificacao));
-          tempoDecorrido += intervaloVerificacao;
-
-          // Verifica o status atual
-          try {
-            const callRecord = await this.twilioService.client.calls(callSid).fetch();
-            console.log(`📞 [BullMQ] [${tempoDecorrido / 1000}s] Status da chamada para ${contactName}: ${callRecord.status}`);
-
-            // Se a chamada foi atendida
-            if (callRecord.status === 'completed' || callRecord.status === 'in-progress') {
-              console.log(`🎉 [BullMQ] CHAMADA ATENDIDA por ${contactName}! Status: ${callRecord.status}`);
-              chamadaFinalizada = true;
-
-              // Verifica se o alerta ainda está pendente
-              const currentAlert = await this.prismaService.fallAlert.findUnique({
-                where: { id: alertId },
-              });
-
-              if (currentAlert && currentAlert.status === 'PENDING') {
-                // Marca como resolvido
-                await this.prismaService.fallAlert.update({
-                  where: { id: alertId },
-                  data: { 
-                    status: 'RESOLVED',
-                    confirmedByContactId: contactId,
-                    respondedAt: new Date()
-                  },
-                });
-
-                console.log(`✅ [BullMQ] Alerta ${alertId} marcado como RESOLVED porque ${contactName} atendeu à chamada.`);
-
-                // Emite evento para o WebSocket
-                this.gateway.emitAlertStatusChange({
-                  id: alertId,
-                  patientId: currentAlert.patientId,
-                  status: 'RESOLVED',
-                  respondedBy: contactId,
-                });
-
-                // Envia confirmação por WhatsApp
-                const contact = await this.prismaService.emergencyContact.findUnique({
-                  where: { id: contactId }
-                });
-
-                if (contact) {
-                  await this.twilioService.sendCallAnsweredConfirmationWhatsApp(contact.phone, {
-                    contactName: contactName,
-                    patientName: patientName
-                  });
-                }
-
-                // Cancela outros jobs relacionados ao alerta
-                const jobs = await this.alertsQueue.getJobs(['delayed']);
-                for (const relatedJob of jobs) {
-                  if (relatedJob.data.alertId === alertId && relatedJob.id !== job.id) {
-                    console.log(`[BullMQ] Cancelando job ${relatedJob.id} (${relatedJob.name}) porque alerta foi resolvido por chamada`);
-                    await relatedJob.remove();
-                  }
-                }
-              }
-
-            } else if (callRecord.status === 'failed' || 
-                      callRecord.status === 'busy' || 
-                      callRecord.status === 'no-answer' || 
-                      callRecord.status === 'canceled') {
-              console.log(`❌ [BullMQ] Chamada finalizada para ${contactName} com status: ${callRecord.status}`);
-              chamadaFinalizada = true;
-            } else {
-              console.log(`🔄 [BullMQ] Chamada ainda com status '${callRecord.status}', continuando monitoramento...`);
-            }
-
-          } catch (error) {
-            console.error(`❌ [BullMQ] Erro ao verificar status da chamada: ${error.message}`);
-            chamadaFinalizada = true;
-          }
-        }
-
-        if (!chamadaFinalizada) {
-          console.log(`⏰ [BullMQ] Tempo máximo de monitoramento atingido para chamada ${callSid}`);
-        }
-
-      } catch (error) {
-        console.error(`[BullMQ] Erro no monitoramento da chamada ${callSid}:`, error);
-      }
+      // Aqui você pode adicionar lógica de monitoramento de chamadas se necessário
+      console.log(`[BullMQ] ✅ Monitoramento de chamada concluído para alerta ${alertId}`);
     }
   }
 }

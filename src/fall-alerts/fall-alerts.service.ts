@@ -1,5 +1,5 @@
 // fall-alerts.service.ts
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { FallAlertsGateway } from './fall-alerts.gateway';
 import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
@@ -124,133 +124,204 @@ export class FallAlertsService {
     return payload;
   }
 
-  // 🆕 Marcar como falso alerta
+  //  Marcar como falso alerta
   async markFalseAlarm(alertId: string, caregiverId: string) {
-    const alert = await this.prismaService.fallAlert.findUnique({
-      where: { id: alertId },
-    });
+    try {
+      const alert = await this.prismaService.fallAlert.findUnique({
+        where: { id: alertId },
+      });
 
-    if (!alert) throw new alertNoExisting(alertId);
+      if (!alert) throw new alertNoExisting(alertId);
 
-    if (alert.status !== 'PENDING') {
-      throw new BadRequestException('Alerta já foi processado');
-    }
+      if (alert.status !== 'PENDING') {
+        throw new BadRequestException('Alerta já foi processado');
+      }
 
-    const patient = await this.prismaService.user.findUnique({
-      where: { id: alert.patientId },
-    });
 
-    const caregiver = await this.prismaService.user.findUnique({
-      where: { id: caregiverId },
-    });
+      const patient = await this.prismaService.user.findUnique({
+        where: { id: alert.patientId },
+      });
 
-    // Atualiza status
-    const updated = await this.prismaService.fallAlert.update({
-      where: { id: alertId },
-      data: { 
-        status: 'FALSE_ALARM',
-        respondedBy: caregiverId,
-        respondedAt: new Date(),
-      },
-    });
+      const caregiver = await this.prismaService.user.findUnique({
+        where: { id: caregiverId },
+      });
 
-    // Notifica todos os cuidadores
-    const allCaregivers = await this.prismaService.emergencyContact.findMany({
-      where: { patientId: alert.patientId },
-    });
+      if (!caregiver) {
+        throw new BadRequestException(`Cuidador não encontrado: ${caregiverId}`);
+      }
 
-    for (const contact of allCaregivers) {
-      await this.twilioService.sendFalseAlarmWhatsApp(contact.phone, {
-        patientName: patient?.name || 'Paciente',
-        responderName: caregiver?.name || 'Cuidador'
+      // Atualiza status
+      const updated = await this.prismaService.fallAlert.update({
+        where: { id: alertId },
+        data: { 
+          status: 'FALSE_ALARM',
+          respondedBy: caregiverId,
+          respondedAt: new Date(),
+        },
+      });
+
+      console.log(`✅ Alerta ${alertId} marcado como FALSE_ALARM no banco`);
+
+      // Notifica todos os cuidadores (com try/catch individual)
+      try {
+        const allCaregivers = await this.prismaService.emergencyContact.findMany({
+          where: { patientId: alert.patientId },
+        });
+
+        for (const contact of allCaregivers) {
+          try {
+            await this.twilioService.sendFalseAlarmWhatsApp(contact.phone, {
+              patientName: patient?.name || 'Paciente',
+              responderName: caregiver?.name || 'Cuidador'
+            });
+          } catch (whatsappError) {
+            console.error(`❌ Erro ao enviar WhatsApp para ${contact.name}:`, whatsappError);
+            // Não interrompe o fluxo
+          }
+        }
+      } catch (notifyError) {
+        console.error('❌ Erro ao notificar cuidadores:', notifyError);
+        // Não interrompe o fluxo
+      }
+
+      // Emite via WebSocket (com try/catch)
+      try {
+        this.gateway.emitAlertStatusChange({
+          id: updated.id,
+          patientId: updated.patientId,
+          status: updated.status,
+          respondedBy: caregiverId,
+        });
+        console.log(`✅ WebSocket emitido com sucesso para alerta ${alertId}`);
+      } catch (wsError) {
+        console.error('❌ Erro ao emitir WebSocket:', wsError);
+        // Não interrompe o fluxo
+      }
+
+      // Cancela todos os jobs relacionados (com try/catch)
+      try {
+        const jobs = await this.alertsQueue.getJobs(['delayed']);
+        let canceledCount = 0;
+        
+        for (const job of jobs) {
+          if (job.data.alertId === alertId) {
+            console.log(`🗑️ Cancelando job ${job.id} (${job.name}) relacionado ao alerta ${alertId}`);
+            await job.remove();
+            canceledCount++;
+          }
+        }
+        
+        console.log(`✅ ${canceledCount} jobs cancelados com sucesso`);
+      } catch (queueError) {
+        console.error('❌ Erro ao cancelar jobs da fila:', queueError);
+        // Não interrompe o fluxo
+      }
+
+      return {
+        id: updated.id,
+        caregiverId: caregiverId,
+        status: updated.status
+      };
+    } catch (error) {
+      console.error('❌ Erro em markFalseAlarm:', error);
+      
+      // Se for um erro conhecido, relança
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      // Caso contrário, lança erro genérico
+      throw new InternalServerErrorException({
+        message: 'Erro ao marcar alerta como falso alarme',
+        details: error.message
       });
     }
-
-    // Emite via WebSocket
-    this.gateway.emitAlertStatusChange({
-      id: updated.id,
-      patientId: updated.patientId,
-      status: updated.status,
-      respondedBy: caregiverId,
-    });
-
-    // Cancela todos os jobs relacionados a este alerta (auto confirmação e notificação de contatos secundários)
-    const jobs = await this.alertsQueue.getJobs(['delayed']);
-    for (const job of jobs) {
-      if (job.data.alertId === alertId) {
-        console.log(`Cancelando job ${job.id} (${job.name}) relacionado ao alerta ${alertId}`);
-        await job.remove();
-      }
-    }
-
-    return updated;
   }
 
   // Marcar como "estou verificando"
   async markVerifying(alertId: string, caregiverId: string) {
-    const alert = await this.prismaService.fallAlert.findUnique({
-      where: { id: alertId },
-    });
+    try {
+      const alert = await this.prismaService.fallAlert.findUnique({
+        where: { id: alertId },
+      });
 
-    if (!alert) throw new alertNoExisting(alertId);
-    if (alert.status !== 'PENDING') {
-      throw new BadRequestException('Alerta já foi processado');
-    }
-
-    const caregiver = await this.prismaService.user.findUnique({
-      where: { id: caregiverId },
-    });
-
-    // Atualiza status
-    const verificationDeadline = new Date(Date.now() + 120000); // 2 minutos
-    const updated = await this.prismaService.fallAlert.update({
-      where: { id: alertId },
-      data: { 
-        status: 'VERIFYING',
-        respondedBy: caregiverId,
-        respondedAt: new Date(),
-        verificationDeadline,
-      },
-    });
-
-    // Emite via WebSocket
-    this.gateway.emitAlertStatusChange({
-      id: updated.id,
-      patientId: updated.patientId,
-      status: updated.status,
-      respondedBy: caregiverId,
-      verificationDeadline,
-    });
-
-    // Cancela job de notificar contatos secundários, já que alguém está verificando
-    const jobs = await this.alertsQueue.getJobs(['delayed']);
-    for (const job of jobs) {
-      if (job.data.alertId === alertId && job.name === 'notifySecondaryContacts') {
-        console.log(`Cancelando job ${job.id} (${job.name}) relacionado ao alerta ${alertId}`);
-        await job.remove();
+      if (!alert) throw new alertNoExisting(alertId);
+      
+      if (alert.status !== 'PENDING') {
+        throw new BadRequestException('Alerta já foi processado');
       }
-    }
 
-    // Agenda job para cobrar confirmação em 2 minutos
-    await this.alertsQueue.add(
-      'requestConfirmation',
-      { alertId: alert.id, caregiverId },
-      { delay: 120000 }, // 2 minutos
-    );
+      const caregiver = await this.prismaService.user.findUnique({
+        where: { id: caregiverId },
+      });
 
-    // Notifica outros cuidadores
-    const patient = await this.prismaService.user.findUnique({
-      where: { id: alert.patientId },
-    });
+      // Atualiza status
+      const verificationDeadline = new Date(Date.now() + 120000); // 2 minutos
+      const updated = await this.prismaService.fallAlert.update({
+        where: { id: alertId },
+        data: { 
+          status: 'VERIFYING',
+          respondedBy: caregiverId,
+          respondedAt: new Date(),
+          verificationDeadline,
+        },
+      });
 
-    // Notifica outros cuidadores
-    const allCaregivers = await this.prismaService.emergencyContact.findMany({
-      where: { patientId: alert.patientId },
-    });
+      console.log(`✅ Alerta ${alertId} marcado como VERIFYING no banco`);
 
-    for (const contact of allCaregivers) {
-      if (contact.id !== caregiverId) { // não envia para quem está verificando
-        const message = `Oi! 👋
+      // Emite via WebSocket (com try/catch)
+      try {
+        this.gateway.emitAlertStatusChange({
+          id: updated.id,
+          patientId: updated.patientId,
+          status: updated.status,
+          respondedBy: caregiverId,
+          verificationDeadline,
+        });
+        console.log(`✅ WebSocket emitido com sucesso para alerta ${alertId}`);
+      } catch (wsError) {
+        console.error('❌ Erro ao emitir WebSocket:', wsError);
+      }
+
+      // Cancela job de notificar contatos secundários (com try/catch)
+      try {
+        const jobs = await this.alertsQueue.getJobs(['delayed']);
+        for (const job of jobs) {
+          if (job.data.alertId === alertId && job.name === 'notifySecondaryContacts') {
+            console.log(`🗑️ Cancelando job ${job.id} (${job.name}) relacionado ao alerta ${alertId}`);
+            await job.remove();
+          }
+        }
+      } catch (queueError) {
+        console.error('❌ Erro ao cancelar jobs da fila:', queueError);
+      }
+
+      // Agenda job para cobrar confirmação (com try/catch)
+      try {
+        await this.alertsQueue.add(
+          'requestConfirmation',
+          { alertId: alert.id, caregiverId },
+          { delay: 10000 }, // 10 segundos
+        );
+        console.log(`✅ Job requestConfirmation agendado para 10 segundos`);
+      } catch (queueError) {
+        console.error('❌ Erro ao agendar job requestConfirmation:', queueError);
+      }
+
+      // Notifica outros cuidadores (com try/catch)
+      try {
+        const patient = await this.prismaService.user.findUnique({
+          where: { id: alert.patientId },
+        });
+
+        const allCaregivers = await this.prismaService.emergencyContact.findMany({
+          where: { patientId: alert.patientId },
+        });
+
+        for (const contact of allCaregivers) {
+          if (contact.id !== caregiverId) {
+            try {
+              const message = `Oi! 👋
 
 *${caregiver?.name}* está indo verificar a situação de *${patient?.name}*.
 
@@ -258,48 +329,87 @@ Em alguns minutos teremos mais informações. 🕐
 
 Fique atento(a) ao celular, caso precisemos de você! 📱`;
 
-        await this.twilioService.sendWhatsAppMessage(contact.phone, message);
+              await this.twilioService.sendWhatsAppMessage(contact.phone, message);
+            } catch (whatsappError) {
+              console.error(`❌ Erro ao enviar WhatsApp para ${contact.name}:`, whatsappError);
+            }
+          }
+        }
+      } catch (notifyError) {
+        console.error('❌ Erro ao notificar cuidadores:', notifyError);
       }
-    }
 
-    return updated;
+      return updated;
+    } catch (error) {
+      console.error('❌ Erro em markVerifying:', error);
+      
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      throw new InternalServerErrorException({
+        message: 'Erro ao marcar alerta como verificando',
+        details: error.message
+      });
+    }
   }
 
   // 🆕 Confirmar após verificação
   async confirmAfterVerification(alertId: string, caregiverId: string) {
-    const alert = await this.prismaService.fallAlert.findUnique({
-      where: { id: alertId },
-    });
+    try {
+      const alert = await this.prismaService.fallAlert.findUnique({
+        where: { id: alertId },
+      });
 
-    if (!alert) throw new alertNoExisting(alertId);
-    if (alert.status !== 'VERIFYING') {
-      throw new BadRequestException('Alerta não está em verificação');
-    }
+      if (!alert) throw new alertNoExisting(alertId);
+      if (alert.status !== 'VERIFYING') {
+        throw new BadRequestException('Alerta não está em verificação');
+      }
 
-    const patient = await this.prismaService.user.findUnique({
-      where: { id: alert.patientId },
-    });
+      const patient = await this.prismaService.user.findUnique({
+        where: { id: alert.patientId },
+      });
 
-    const caregiver = await this.prismaService.user.findUnique({
-      where: { id: caregiverId },
-    });
+      const caregiver = await this.prismaService.user.findUnique({
+        where: { id: caregiverId },
+      });
 
-    // Notifica todos antes de confirmar
-    const allCaregivers = await this.prismaService.emergencyContact.findMany({
-      where: { patientId: alert.patientId },
-    });
+      // Notifica todos antes de confirmar (com try/catch)
+      try {
+        const allCaregivers = await this.prismaService.emergencyContact.findMany({
+          where: { patientId: alert.patientId },
+        });
 
-    for (const contact of allCaregivers) {
-      const message = `⚠️ ATENÇÃO
+        for (const contact of allCaregivers) {
+          try {
+            const message = `⚠️ ATENÇÃO
 
 *${caregiver?.name}* confirmou que *${patient?.name}* realmente caiu e precisa de ajuda!
 
 Vamos acionar todos os contatos de emergência agora. 🚨`;
 
-      await this.twilioService.sendWhatsAppMessage(contact.phone, message);
-    }
+            await this.twilioService.sendWhatsAppMessage(contact.phone, message);
+          } catch (whatsappError) {
+            console.error(`❌ Erro ao enviar WhatsApp para ${contact.name}:`, whatsappError);
+          }
+        }
+      } catch (notifyError) {
+        console.error('❌ Erro ao notificar cuidadores:', notifyError);
+      }
 
-    return this.confirmAlert(alertId);
+      return this.confirmAlert(alertId);
+    } catch (error) {
+      console.error('❌ Erro em confirmAfterVerification:', error);
+      
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      throw new InternalServerErrorException({
+        message: 'Erro ao confirmar alerta após verificação',
+        details: error.message
+      });
+    }
   }
 
   // ✅ Confirmar alerta (prioriza o contato prioritário e só depois envia para secundários)

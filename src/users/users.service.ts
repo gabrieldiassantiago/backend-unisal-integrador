@@ -69,6 +69,7 @@ export class UsersService {
    * Gera um código de 6 dígitos e envia por email
    * Agora também salva os dados temporários do usuário
    */
+  
   private async generateAndSendVerificationCode(
     email: string, 
     userName: string,

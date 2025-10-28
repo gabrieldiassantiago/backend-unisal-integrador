@@ -4,18 +4,19 @@ import { PairDeviceDto } from './dtos/pair-device.dto';
 import { existingDevicePair } from 'src/errors/existingDevicePair';
 import * as bcrypt from 'bcrypt';
 import { noFoundUser } from 'src/errors/noFoundUser';
+import { Device, DeviceStatus } from '@src/types/device.type';
 
 @Injectable()
 export class DevicesService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  async pairDevice(data: PairDeviceDto) {
+  async pairDevice(data: PairDeviceDto) : Promise <Device> {
     const existingDevicePaired = await this.prismaService.device.findUnique({
       where: { deviceIdentifier: data.serial },
     });
 
     const patientExists = await this.prismaService.user.findUnique({
-      where: { id: data.patientId }, // esse user precisa ser role=PATIENT
+      where: { id: data.patientId }, 
     });
 
     if (!patientExists) {
@@ -49,7 +50,7 @@ export class DevicesService {
       id: device.id,
       deviceIdentifier: device.deviceIdentifier,
       patientId: device.patientId, 
-      status: device.status,       
+      status: device.status as DeviceStatus,
       registeredAt: device.registeredAt,
     };
   }
