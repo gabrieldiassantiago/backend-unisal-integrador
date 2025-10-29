@@ -12,7 +12,6 @@ import { PatientModule } from './patient/patient.module';
 import { FamilyModule } from './family/family.module';
 import { ConfigModule } from '@nestjs/config';
 import { TwilioModule } from './twilio/twillio.module';
-import { UploadModule } from './upload/upload.module';
 
 @Module({
   imports: [
@@ -25,7 +24,6 @@ import { UploadModule } from './upload/upload.module';
     PatientModule,
     FamilyModule,
     TwilioModule,
-    UploadModule,
     ConfigModule.forRoot({
       isGlobal: true
     }),
