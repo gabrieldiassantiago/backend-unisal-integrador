@@ -12,6 +12,7 @@ import { PatientModule } from './patient/patient.module';
 import { FamilyModule } from './family/family.module';
 import { ConfigModule } from '@nestjs/config';
 import { TwilioModule } from './twilio/twillio.module';
+import { GeoModule } from './geo_reverse/geo.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { TwilioModule } from './twilio/twillio.module';
     PatientModule,
     FamilyModule,
     TwilioModule,
+    GeoModule,
     ConfigModule.forRoot({
       isGlobal: true
     }),
