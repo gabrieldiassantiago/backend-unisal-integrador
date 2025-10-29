@@ -14,7 +14,6 @@ import {
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dtos/create-user.dto';
-import { UserResponseDto } from './dtos/user-response.dto';
 import { UserWithRelationsDto } from './dtos/user-with-relations.dto';
 import { VerifyEmailDto } from './dtos/verify-email.dto';
 import { ResendVerificationDto } from './dtos/resend-verification.dto';
