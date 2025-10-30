@@ -7,7 +7,7 @@ export class GeoService {
    private readonly logger = new Logger(GeoService.name);
    constructor(private readonly httpService: HttpService) {}
 
-   async reverseGeoCode(lat: number, long: number) : Promise<void> {
+   async reverseGeoCode(lat: number, long: number) : Promise<string> {
 
     try {
         const apiKey = process.env.GEO_API_KEY;
