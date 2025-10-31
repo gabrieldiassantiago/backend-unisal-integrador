@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { GeoService } from './geo.service';
 
@@ -29,6 +29,10 @@ export class GeoController {
     const lat = parseFloat(latitude);
     const long = parseFloat(longitude);
     const address = await this.geoService.reverseGeoCode(lat, long);
+
+    if (address.length < 0) {
+      throw new BadRequestException("Coordenadas inválidas");
+    }
     
     return {
       address,
