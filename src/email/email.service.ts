@@ -2,7 +2,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Mailgun from 'mailgun.js';
-import * as FormData from 'form-data'; // MUDE AQUI
+import * as FormData from 'form-data';
 
 @Injectable()
 export class EmailService implements OnModuleInit {
@@ -17,7 +17,7 @@ export class EmailService implements OnModuleInit {
     this.fromName = this.configService.get<string>('FROM_NAME') || 'InteliSensor';
     this.domain = this.configService.get<string>('MAILGUN_DOMAIN') || 'sandbox123.mailgun.org';
     
-    const mailgun = new Mailgun(FormData);
+    const mailgun = new Mailgun(FormData as any);
     this.mg = mailgun.client({
       username: 'api',
       key: this.configService.get<string>('MAILGUN_API_KEY'),
