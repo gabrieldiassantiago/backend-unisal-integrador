@@ -7,6 +7,7 @@ import { FallAlertsModule } from './fall-alerts/fall-alerts.module';
 import { EmergencyContactsModule } from './emergency-contacts/emergency-contacts.module';
 import { AuthModule } from './auth/auth.module';
 import { BullModule } from '@nestjs/bullmq';
+import { ScheduleModule } from '@nestjs/schedule';
 import { CaregiverModule } from './caregiver/caregiver.module';
 import { PatientModule } from './patient/patient.module';
 import { FamilyModule } from './family/family.module';
@@ -29,7 +30,7 @@ import { GeoModule } from './geo_reverse/geo.module';
     ConfigModule.forRoot({
       isGlobal: true
     }),
-
+    ScheduleModule.forRoot(),
     BullModule.forRoot({
       connection: {
         host: process.env.REDIS_HOST,
