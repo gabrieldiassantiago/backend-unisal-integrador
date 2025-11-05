@@ -1,5 +1,5 @@
 // caregiver/caregiver.controller.ts
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@src/auth/jwt-auth.guard';
 import { CurrentUserId } from '@src/common/decorators/current-user-id.decorator';
@@ -32,5 +32,12 @@ export class CaregiverController {
     @Body('ttlMinutes') ttlMinutes?: number, 
   ) {
     return this.svc.renewLoginCode(userId, patientId, ttlMinutes);
+  }
+
+  @Get('patients')
+  @ApiOperation({ summary: 'Listar todos os pacientes do cuidador com seus familiares' })
+  @ApiResponse({ status: 200, description: 'Lista de pacientes com familiares' })
+  getAllPatientsWithFamily(@CurrentUserId() userId: string) {
+    return this.svc.getAllPatientsWithFamily(userId);
   }
 }
