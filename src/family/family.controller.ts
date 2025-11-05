@@ -83,4 +83,14 @@ export class FamilyController {
       patientId,
     );
   }
+
+  // Obter informações completas da família de um paciente
+  @Get('patients/:patientId/full-family')
+  @UseGuards(JwtAuthGuard)
+  async getFullFamilyInfo(
+    @CurrentUserId() userId: string,
+    @Param('patientId') patientId: string,
+  ) {
+    return this.familyService.getFullFamilyInfo(patientId, userId);
+  }
 }

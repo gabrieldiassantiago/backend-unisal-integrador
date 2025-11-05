@@ -14,7 +14,6 @@ import { AcceptFamilyInviteDto } from './dtos/accept-family-invite.dto';
 import { UpdateFamilyPermissionsDto } from './dtos/update-family-permissions.dto';
 import { FamilyMemberResponseDto, FamilyPatientResponseDto } from './dtos/family-response.dto';
 
-// Função auxiliar para normalizar códigos (adicionar proteção contra undefined)
 function normalizeCode(code?: string): string {
   if (!code) return '';
   return code.replace(/[^0-9]/g, '');
@@ -530,5 +529,128 @@ export class FamilyService {
     }
 
     return familyRelation.permissions;
+  }
+
+  // Método para obter informações completas da família de um paciente
+  async getFullFamilyInfo(patientId: string, requestingUserId: string) {
+    // Verificar se o usuário tem acesso ao paciente
+    const hasAccess = await this.hasAccessToPatient(requestingUserId, patientId);
+    if (!hasAccess) {
+      throw new ForbiddenException('Você não tem acesso a este paciente');
+    }
+
+    // Buscar paciente
+    const patient = await this.prisma.user.findUnique({
+      where: { id: patientId },
+      select: {
+        id: true,
+        name: true,
+        birthDate: true,
+        gender: true,
+        email: true,
+        createdAt: true,
+      },
+    });
+
+    if (!patient) {
+      throw new NotFoundException('Paciente não encontrado');
+    }
+
+    // Buscar cuidador principal
+    const caregiverRelation = await this.prisma.caregiverPatient.findFirst({
+      where: { patientId },
+      include: {
+        caregiver: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    // Buscar todos os familiares (aceitos e pendentes)
+    const familyRelations = await this.prisma.familyRelation.findMany({
+      where: {
+        patientId,
+        revokedAt: null,
+      },
+      include: {
+        familyMember: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            hasAccount: true,
+            createdAt: true,
+          },
+        },
+        permissions: true,
+        primaryCaregiver: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [
+        { acceptedAt: 'desc' }, // Aceitos primeiro
+        { invitedAt: 'desc' }, // Depois por data de convite
+      ],
+    });
+
+    return {
+      patient: {
+        id: patient.id,
+        name: patient.name,
+        birthDate: patient.birthDate,
+        gender: patient.gender,
+        email: patient.email,
+        createdAt: patient.createdAt,
+        age: calcAge(patient.birthDate),
+      },
+      primaryCaregiver: caregiverRelation
+        ? {
+            id: caregiverRelation.caregiver.id,
+            name: caregiverRelation.caregiver.name,
+            email: caregiverRelation.caregiver.email,
+            role: caregiverRelation.caregiver.role,
+            createdAt: caregiverRelation.caregiver.createdAt,
+            relationId: caregiverRelation.id,
+            relationCreatedAt: caregiverRelation.createdAt,
+          }
+        : null,
+      familyMembers: familyRelations.map((relation) => ({
+        id: relation.familyMember.id,
+        name: relation.familyMember.name,
+        email: relation.familyMember.email,
+        role: relation.familyMember.role,
+        hasAccount: relation.familyMember.hasAccount,
+        createdAt: relation.familyMember.createdAt,
+        invitedAt: relation.invitedAt,
+        acceptedAt: relation.acceptedAt,
+        status: relation.acceptedAt ? 'accepted' : 'pending',
+        invitedBy: {
+          id: relation.primaryCaregiver.id,
+          name: relation.primaryCaregiver.name,
+          email: relation.primaryCaregiver.email,
+        },
+        permissions: relation.permissions
+          ? {
+              canViewAlerts: relation.permissions.canViewAlerts,
+              canRespondAlerts: relation.permissions.canRespondAlerts,
+              canViewProfile: relation.permissions.canViewProfile,
+              canEditProfile: relation.permissions.canEditProfile,
+              canManageContacts: relation.permissions.canManageContacts,
+              canInviteFamily: relation.permissions.canInviteFamily,
+            }
+          : null,
+      })),
+    };
   }
 }
