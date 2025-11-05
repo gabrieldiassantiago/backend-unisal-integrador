@@ -1,15 +1,14 @@
 // fall-alerts.service.ts
-import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { FallAlertsGateway } from './fall-alerts.gateway';
 import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
-import * as bcrypt from 'bcrypt';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { deviceNotExisting } from '@src/errors/deviceNoExist';
-import { apiKeyInvalid } from '@src/errors/apiKeyInvalid';
 import { alertNoExisting } from '@src/errors/alertNoExistint';
 import { TwilioService } from '@src/twilio/twilio.service';
+import { FamilyService } from '@src/family/family.service';
 
 @Injectable()
 export class FallAlertsService {
@@ -18,12 +17,11 @@ export class FallAlertsService {
     private readonly prismaService: PrismaService,
     private readonly gateway: FallAlertsGateway,
     private readonly twilioService: TwilioService,
+    private readonly familyService: FamilyService,
   ) {}
 
   async createAlert(data: CreateFallAlertDto) {
-    console.time('🔍 TOTAL createAlert');
-    
-    console.time('🔍 Device lookup');
+
     const device = await this.prismaService.device.findUnique({
       where: { deviceIdentifier: data.serial },
       select: {
@@ -33,7 +31,6 @@ export class FallAlertsService {
         deviceIdentifier: true
       }
     });
-    console.timeEnd('🔍 Device lookup');
     
     if (!device) {
       throw new deviceNotExisting(data.serial);
@@ -74,6 +71,7 @@ export class FallAlertsService {
     this.gateway.emitNewAlert(payload);
     console.timeEnd('🔍 WebSocket emit');
 
+    // Buscar tokens de cuidadores principais vinculados ao paciente
     const caregiverTokens = await this.prismaService.pushToken.findMany({
       where: {
         user: {
@@ -83,11 +81,28 @@ export class FallAlertsService {
         }
       },
       select: { token: true }
-    })
-    const tokens = caregiverTokens.map(t => t.token);
+    });
 
+    // Buscar tokens de familiares vinculados ao paciente com permissão para ver alertas
+    const familyMemberTokens = await this.prismaService.pushToken.findMany({
+      where: {
+        user: {
+          role: 'FAMILY_MEMBER',
+          familyMemberRelations: {
+            some: {
+              patientId: device.patientId,
+              acceptedAt: { not: null },
+              revokedAt: null,
+              permissions: {
+                canViewAlerts: true
+              }
+            }
+          }
+        }
+      },
+      select: { token: true }
+    });
 
-    console.time('🔍 Queue jobs');
     await Promise.all([
       this.alertsQueue.add(
         'processInitialAlert',
@@ -124,6 +139,37 @@ export class FallAlertsService {
     return payload;
   }
 
+  // Helper para verificar se usuário pode responder alertas
+  private async canUserRespondAlert(userId: string, patientId: string): Promise<boolean> {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    if (!user) return false;
+
+    // Cuidador principal sempre pode responder
+    if (user.role === 'CAREGIVER') {
+      const caregiverPatient = await this.prismaService.caregiverPatient.findUnique({
+        where: {
+          caregiverId_patientId: {
+            caregiverId: userId,
+            patientId: patientId,
+          },
+        },
+      });
+      return !!caregiverPatient;
+    }
+
+    // Familiar precisa ter permissão canRespondAlerts
+    if (user.role === 'FAMILY_MEMBER') {
+      const permissions = await this.familyService.getFamilyPermissions(userId, patientId);
+      return permissions?.canRespondAlerts ?? false;
+    }
+
+    return false;
+  }
+
   //  Marcar como falso alerta
   async markFalseAlarm(alertId: string, caregiverId: string) {
     try {
@@ -137,6 +183,11 @@ export class FallAlertsService {
         throw new BadRequestException('Alerta já foi processado');
       }
 
+      // Verificar permissão para responder alerta
+      const canRespond = await this.canUserRespondAlert(caregiverId, alert.patientId);
+      if (!canRespond) {
+        throw new ForbiddenException('Você não tem permissão para responder este alerta');
+      }
 
       const patient = await this.prismaService.user.findUnique({
         where: { id: alert.patientId },
@@ -147,7 +198,7 @@ export class FallAlertsService {
       });
 
       if (!caregiver) {
-        throw new BadRequestException(`Cuidador não encontrado: ${caregiverId}`);
+        throw new BadRequestException(`Usuário não encontrado: ${caregiverId}`);
       }
 
       // Atualiza status
@@ -249,6 +300,12 @@ export class FallAlertsService {
       
       if (alert.status !== 'PENDING') {
         throw new BadRequestException('Alerta já foi processado');
+      }
+
+      // Verificar permissão para responder alerta
+      const canRespond = await this.canUserRespondAlert(caregiverId, alert.patientId);
+      if (!canRespond) {
+        throw new ForbiddenException('Você não tem permissão para responder este alerta');
       }
 
       const caregiver = await this.prismaService.user.findUnique({
@@ -364,6 +421,12 @@ Fique atento(a) ao celular, caso precisemos de você! 📱`;
       if (!alert) throw new alertNoExisting(alertId);
       if (alert.status !== 'VERIFYING') {
         throw new BadRequestException('Alerta não está em verificação');
+      }
+
+      // Verificar permissão para responder alerta
+      const canRespond = await this.canUserRespondAlert(caregiverId, alert.patientId);
+      if (!canRespond) {
+        throw new ForbiddenException('Você não tem permissão para responder este alerta');
       }
 
       const patient = await this.prismaService.user.findUnique({
@@ -538,6 +601,7 @@ Vamos acionar todos os contatos de emergência agora. 🚨`;
           // Verifica se a chamada foi atendida
           // 'completed' = chamada foi atendida e finalizada 
           // 'in-progress' = chamada foi atendida e ainda está em andamento
+          
           if (callRecord.status === 'completed') {
             console.log(`🎉 CHAMADA ATENDIDA por ${contatoPrioritario.name} na tentativa ${tentativa}! Status: ${callRecord.status}`);
             callAnswered = true;
