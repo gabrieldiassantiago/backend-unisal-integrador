@@ -42,6 +42,8 @@ export class FallAlertsGateway
     @MessageBody() patientId: string,
     @ConnectedSocket() client: Socket,
   ) {
+    // Permite que cuidadores principais e familiares (via frontend autenticado)
+    // façam join na sala do paciente para receber eventos de alertas
     const roomName = `patient_${patientId}`;
     client.join(roomName);
 
@@ -51,7 +53,6 @@ export class FallAlertsGateway
     console.log(`👤 PatientId: ${patientId}`);
     console.log(`👤 Sala: ${roomName}`);
 
-    // Use official API instead of adapter.rooms
     const sockets = await this.server?.in(roomName).fetchSockets();
     const clientCount = sockets?.length ?? 0;
     console.log(`👤 Clientes na sala: ${clientCount}`);

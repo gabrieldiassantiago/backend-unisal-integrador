@@ -172,7 +172,9 @@ export class UsersController {
     status: HttpStatus.CONFLICT,
     description: 'Email já está em uso'
   })
+
   async updateMyProfile(@Request() req, @Body() dto: EditUserDto) {
     return this.usersService.editUser(req.user.userId, dto);
   }
+  
 }

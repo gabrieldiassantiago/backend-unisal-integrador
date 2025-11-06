@@ -1,13 +1,18 @@
 // fall-alerts.controller.ts
-import { Controller, Post, Body, Get, Query, Patch, Param, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, Patch, Param, BadRequestException, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { FallAlertsService } from './fall-alerts.service';
 import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
+import { PrismaService } from '@src/prisma/prisma.service';
+import { JwtAuthGuard } from '@src/auth/jwt-auth.guard';
 
 @ApiTags('Alertas de Queda')
 @Controller('fall-alerts')
 export class FallAlertsController {
-  constructor(private readonly fallAlertsService: FallAlertsService) {}
+  constructor(
+    private readonly fallAlertsService: FallAlertsService,
+    private readonly prismaService: PrismaService,
+  ) {}
 
   @Post()
   @ApiOperation({
@@ -30,16 +35,80 @@ export class FallAlertsController {
     type: 'string',
     required: true,
   })
-async getAlerts(@Query('patientId') patientId: string) {
+  async getAlerts(@Query('patientId') patientId: string) {
+    if (!patientId) {
+      throw new BadRequestException('O ID do paciente é obrigatório');
+    }
 
-  if (!patientId) {
-    throw new BadRequestException('O ID o paciente é obrigatório');
+    return this.fallAlertsService.getAlertsByPatient(patientId);
   }
 
-  return this.fallAlertsService.getAlertsByPatient(patientId);
+  @Post('register-push-token')
+  @UseGuards(JwtAuthGuard)
 
-  
-}
+  @ApiOperation({
+    summary: 'Registrar token Expo Push',
+    description: 'App envia o token Expo para receber notificações push'
+  })
+
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        token: { type: 'string', description: 'Token Expo Push' }
+      },
+      required: ['token']
+    }
+  })
+  @ApiResponse({ status: 200, description: 'Token registrado com sucesso' })
+  async registerPushToken(
+    @Req() req,
+    @Body() { token }: { token: string }
+  ) {
+    if (!token) {
+      throw new BadRequestException('Token é obrigatório');
+    }
+
+    const userId = req.user.id; // JWT fornece o ID do usuário
+
+    try {
+      // Verificar se o token já existe para outro usuário
+      const existingToken = await this.prismaService.pushToken.findUnique({
+        where: { token },
+      });
+
+      if (existingToken && existingToken.userId !== userId) {
+        console.log(`🔄 Token transferido de ${existingToken.userId} para ${userId}`);
+      }
+
+      // Upsert: atualiza se existe, cria se não existe
+      const pushToken = await this.prismaService.pushToken.upsert({
+        where: { token },
+        update: { 
+          userId, 
+          updatedAt: new Date() 
+        },
+        create: { 
+          userId, 
+          token 
+        },
+      });
+
+      console.log(`✅ Token Expo registrado para usuário ${userId}`);
+
+      return {
+        success: true,
+        message: 'Token registrado com sucesso',
+        data: {
+          tokenId: pushToken.id,
+          registeredAt: pushToken.createdAt,
+        }
+      };
+    } catch (error) {
+      console.error('❌ Erro ao registrar token:', error);
+      throw new BadRequestException('Erro ao registrar token');
+    }
+  }
 
   // 🆕 Marcar como falso alerta
   @Patch(':id/false-alarm')
@@ -50,10 +119,8 @@ async getAlerts(@Query('patientId') patientId: string) {
   async markFalseAlarm(
     @Param('id') id: string,
     @Body() body: { caregiverId: string }
-
-
   ) {
-     if (!body.caregiverId) {
+    if (!body.caregiverId) {
       throw new BadRequestException('O ID do cuidador é obrigatório');
     }
     return this.fallAlertsService.markFalseAlarm(id, body.caregiverId);
@@ -69,6 +136,9 @@ async getAlerts(@Query('patientId') patientId: string) {
     @Param('id') id: string,
     @Body() body: { caregiverId: string }
   ) {
+    if (!body.caregiverId) {
+      throw new BadRequestException('O ID do cuidador é obrigatório');
+    }
     return this.fallAlertsService.markVerifying(id, body.caregiverId);
   }
 
@@ -82,6 +152,9 @@ async getAlerts(@Query('patientId') patientId: string) {
     @Param('id') id: string,
     @Body() body: { caregiverId: string }
   ) {
+    if (!body.caregiverId) {
+      throw new BadRequestException('O ID do cuidador é obrigatório');
+    }
     return this.fallAlertsService.confirmAfterVerification(id, body.caregiverId);
   }
 

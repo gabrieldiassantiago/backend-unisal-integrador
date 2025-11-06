@@ -7,6 +7,7 @@ import { FallAlertsGateway } from './fall-alerts.gateway';
 import { FallAlertsProcessor } from './fall-alerts.processor';
 import { BullModule } from '@nestjs/bullmq';
 import { TwilioService } from 'src/twilio/twilio.service';
+import { FamilyModule } from 'src/family/family.module';
 
 @Module({
   providers: [
@@ -21,6 +22,7 @@ import { TwilioService } from 'src/twilio/twilio.service';
     BullModule.registerQueue({
       name: 'fall-alerts',
     }),
+    FamilyModule,
   ],
 })
 export class FallAlertsModule {}

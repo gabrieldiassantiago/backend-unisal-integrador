@@ -18,6 +18,7 @@ export class UsersService {
    * Pré-cadastro: Envia código mas NÃO cria usuário ainda
    * Usuário só será criado após verificar o email
    */
+  
   async createUser(dto: CreateUserDto) {
     const email = dto.email.toLowerCase().trim();
 
@@ -294,7 +295,6 @@ export class UsersService {
         role: true,
         hasAccount: true,
         createdAt: true,
-        // fall alerts diretamente ligados ao user (se existir relação direta)
         fallAlerts: {
           orderBy: { createdAt: 'desc' },
           select: {

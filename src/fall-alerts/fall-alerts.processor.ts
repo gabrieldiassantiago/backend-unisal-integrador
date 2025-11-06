@@ -82,7 +82,7 @@ export class FallAlertsProcessor extends WorkerHost {
 
   console.log(`[BullMQ] ✅ Alerta ${alertId} está em verificação, enviando lembrete...`);
 
-  // 🚨 VERIFICAÇÃO CRÍTICA: Quantos clientes estão conectados?
+  //  VERIFICAÇÃO CRÍTICA: Quantos clientes estão conectados?
   const roomName = `patient_${alert.patientId}`;
   
   console.log(`\n[BullMQ] 🔍 ================================`);
@@ -175,7 +175,7 @@ export class FallAlertsProcessor extends WorkerHost {
   console.log(`[BullMQ] ✅ Evento requestConfirmation emitido!`);
   console.log(`[BullMQ] 📡 ================================\n`);
   
-  // 🔍 VERIFICAÇÃO PÓS-EMISSÃO
+  //  VERIFICAÇÃO PÓS-EMISSÃO
   console.log(`\n[BullMQ] 🔍 VERIFICAÇÃO PÓS-EMISSÃO`);
   try {
     const socketsAfter = await this.gateway.server?.in(roomName).fetchSockets();

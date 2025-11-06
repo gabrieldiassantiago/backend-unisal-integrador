@@ -159,4 +159,96 @@ export class CaregiverService {
 
   return login;
 }
+
+  async getAllPatientsWithFamily(caregiverId: string) {
+    // Buscar todos os pacientes do cuidador
+    const caregiverPatients = await this.prisma.caregiverPatient.findMany({
+      where: { caregiverId },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            birthDate: true,
+            gender: true,
+            email: true,
+            hasAccount: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Para cada paciente, buscar familiares
+    const patientsWithFamily = await Promise.all(
+      caregiverPatients.map(async (cp) => {
+        // Buscar familiares do paciente
+        const familyRelations = await this.prisma.familyRelation.findMany({
+          where: {
+            patientId: cp.patientId,
+            revokedAt: null,
+          },
+          include: {
+            familyMember: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                hasAccount: true,
+                createdAt: true,
+              },
+            },
+            permissions: true,
+          },
+          orderBy: [
+            { acceptedAt: 'desc' },
+            { invitedAt: 'desc' },
+          ],
+        });
+
+        // Calcular idade
+        const age = cp.patient.birthDate
+          ? Math.floor((Date.now() - cp.patient.birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+          : null;
+
+        return {
+          id: cp.patient.id,
+          name: cp.patient.name,
+          birthDate: cp.patient.birthDate,
+          gender: cp.patient.gender,
+          email: cp.patient.email,
+          hasAccount: cp.patient.hasAccount,
+          createdAt: cp.patient.createdAt,
+          age,
+          relationId: cp.id,
+          relationCreatedAt: cp.createdAt,
+          familyMembers: familyRelations.map((relation) => ({
+            id: relation.familyMember.id,
+            name: relation.familyMember.name,
+            email: relation.familyMember.email,
+            role: relation.familyMember.role,
+            hasAccount: relation.familyMember.hasAccount,
+            createdAt: relation.familyMember.createdAt,
+            invitedAt: relation.invitedAt,
+            acceptedAt: relation.acceptedAt,
+            status: relation.acceptedAt ? 'accepted' : 'pending',
+            permissions: relation.permissions
+              ? {
+                  canViewAlerts: relation.permissions.canViewAlerts,
+                  canRespondAlerts: relation.permissions.canRespondAlerts,
+                  canViewProfile: relation.permissions.canViewProfile,
+                  canEditProfile: relation.permissions.canEditProfile,
+                  canManageContacts: relation.permissions.canManageContacts,
+                  canInviteFamily: relation.permissions.canInviteFamily,
+                }
+              : null,
+          })),
+        };
+      }),
+    );
+
+    return patientsWithFamily;
+  }
 }

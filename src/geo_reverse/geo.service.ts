@@ -1,43 +1,37 @@
 import { Injectable, Logger } from "@nestjs/common";
-import {Client} from "@googlemaps/google-maps-services-js";
+import { HttpService } from "@nestjs/axios";
+import { ConfigService } from "@nestjs/config";
 
-interface ReverseCodeHeader {
-    lat: number;
-    long: number;
-}
-
-interface ReverseCodeResponse {
-    localizacao: string;
-}
 
 @Injectable()
 export class GeoService {
-   private client = new Client({});
    private readonly logger = new Logger(GeoService.name);
-   constructor() {}
+   constructor(private readonly httpService: HttpService,
+    private readonly configService: ConfigService
+   ) {}
 
-   async reverseGeoCode(lat: number, long: number) : Promise<ReverseCodeResponse> {
-    const response = await this.client.reverseGeocode({
-        params: {
-            key: process.env.GOOGLE_MAPS_API_KEY,
-            latlng: [lat, long],
-        }
-    })
-    const result = response.data.results[0];
-    const localizacao = result.formatted_address;
+   async reverseGeoCode(lat: number, long: number) : Promise<string> {
 
-     if (!response.data.results || response.data.results.length === 0) {
-        throw new Error('Nenhum resultado encontrado para as coordenadas fornecidas.');
-    }
+    try {
+        const apiKey = this.configService.get<string>('GEO_API_KEY');
+        const url = `https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${long}&apiKey=${apiKey}`;
 
-    if (!result) {
-        this.logger.warn(`Nenhum resultado encontrado para as coordenadas: lat=${lat}, long=${long}`);
-    }
+        const response = await this.httpService.axiosRef.get(url);
+        const data = response.data;
 
-    return {
-        localizacao
-    }
+        if (data && data.features && data.features.length > 0) {
+            const address = data.features[0].properties.formatted;
+            return address;
+        } else {
+            this.logger.warn(`No address found for coordinates: ${lat}, ${long}`);
+            return 'Address not found';
+        }        
     
+    } catch (error) {
+        this.logger.error(`Error during reverse geocoding: ${error.message}`);
+        return 'Error';
+    }
+
    }
     
 }

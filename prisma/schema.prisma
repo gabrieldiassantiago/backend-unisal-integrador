@@ -71,6 +71,13 @@ model Device {
 
   lastSeenAt       DateTime?
   firmwareVersion  String?
+  
+  // 🆕 Campos para status em tempo real
+  isOnline         Boolean  @default(false)
+  batteryLevel     Int?     // Porcentagem 0-100
+  signalStrength   Int?     // RSSI do WiFi
+  lastHeartbeatAt  DateTime?
+  ipAddress        String?
 
   patientId        String?
   patient          User?      @relation(fields: [patientId], references: [id])
@@ -79,6 +86,7 @@ model Device {
   fallAlerts       FallAlert[] @relation("FallAlertDevice")
 
   @@index([patientId])
+  @@index([isOnline])
 }
 
 model EmergencyContact {
@@ -259,16 +267,15 @@ enum DeviceStatus {
 
 
 model PushToken {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
   token     String   @unique
-  platform  String?  // 'android' | 'ios' | 'web'
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@index([userId])
 }
+
 
 // 🆕 Tabela para verificação de email
 model EmailVerification {
