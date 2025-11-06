@@ -90,7 +90,7 @@ export class TwilioService {
     }
   }
 
-  // 🆕 Métodos específicos usando os templates
+  //  Métodos específicos usando os templates
   async sendFallAlertWhatsApp(to: string, params: FallAlertTemplateParams) {
     const message = fallAlertTemplate(params);
     return this.sendWhatsAppMessage(to, message);
