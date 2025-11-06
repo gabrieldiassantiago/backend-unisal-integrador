@@ -68,7 +68,7 @@ export class UsersService {
 
   /**
    * Gera um código de 6 dígitos e envia por email
-   * Agora também salva os dados temporários do usuário
+   * também salva os dados temporários do usuário
    */
   
   private async generateAndSendVerificationCode(
@@ -156,7 +156,7 @@ export class UsersService {
       },
     });
 
-    // 🆕 CRIA O USUÁRIO agora que o email foi verificado
+    //  criar usuario já que foi verificado
     if (verification.tempUserData) {
       const userData = verification.tempUserData as any;
       
@@ -204,6 +204,7 @@ export class UsersService {
   /**
    * Reenvia código de verificação
    */
+
   async resendVerificationCode(email: string): Promise<{ message: string }> {
     const normalizedEmail = email.toLowerCase().trim();
 
@@ -268,8 +269,6 @@ export class UsersService {
     };
   }
 
-
-
   async getAllUsers() {
     return this.prisma.user.findMany({
       include: {
@@ -285,7 +284,6 @@ export class UsersService {
   }
 
   async getUserProfile(id: string) {
-    // Primeiro buscamos o usuário com relações aninhadas
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
@@ -355,6 +353,7 @@ export class UsersService {
   /**
    * Edita os dados de um usuário
    */
+
   async editUser(id: string, dto: EditUserDto) {
     // Verifica se o usuário existe
     const existingUser = await this.prisma.user.findUnique({
