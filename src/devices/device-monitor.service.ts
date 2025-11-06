@@ -8,13 +8,10 @@ export class DeviceMonitorService {
 
   constructor(private readonly devicesService: DevicesService) {}
 
-  /**
-   * Executa a cada 10 segundos para verificar dispositivos offline
-   */
 
   @Cron(CronExpression.EVERY_10_MINUTES)
   async handleDeviceMonitoring() {
-    this.logger.log('🔍 Verificando dispositivos offline...');
+    this.logger.log(' Verificando dispositivos offline...');
     
     try {
       const result = await this.devicesService.checkOfflineDevices();

@@ -16,18 +16,16 @@ export class VoiceController {
     const voiceResponse = new twiml.VoiceResponse();
 
     try {
-      // Tenta usar voz premium primeiro
       voiceResponse.say(
         { 
           language: 'pt-BR', 
-          voice: 'Polly.Camila' // Voz feminina brasileira do Polly
+          voice: 'Polly.Camila' 
         },
         `Aqui é o sistema de monitoramento. O paciente ${patientName} sofreu uma queda. Por favor, entre em contato imediatamente.`
       );
     } catch (error) {
       console.log('[VoiceController] Voz premium não disponível, usando voz padrão');
       
-      // Fallback para voz padrão
       voiceResponse.say(
         { language: 'pt-BR' },
         `Aqui é o sistema de monitoramento. O paciente ${patientName} sofreu uma queda. Por favor, entre em contato imediatamente.`
