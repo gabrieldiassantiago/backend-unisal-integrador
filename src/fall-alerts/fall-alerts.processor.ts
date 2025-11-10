@@ -6,7 +6,7 @@ import { Queue } from 'bullmq';
 import { FallAlertsService } from './fall-alerts.service';
 import { PrismaService } from '@src/prisma/prisma.service';
 import { FallAlertsGateway } from './fall-alerts.gateway';
-import { TwilioService } from '@src/twilio/twilio.service';
+import { MessagingService } from '@src/messaging/messaging.service';
 
 @Processor('fall-alerts')
 export class FallAlertsProcessor extends WorkerHost {
@@ -15,7 +15,7 @@ export class FallAlertsProcessor extends WorkerHost {
     private readonly fallAlertsService: FallAlertsService,
     private readonly prismaService: PrismaService,
     private readonly gateway: FallAlertsGateway,
-    private readonly twilioService: TwilioService,
+    private readonly messagingService: MessagingService,
   ) {
     super();
   }
@@ -27,6 +27,23 @@ export class FallAlertsProcessor extends WorkerHost {
     console.log(`[BullMQ] 📊 Data:`, JSON.stringify(job.data, null, 2));
     console.log(`========================================\n`);
     
+    //  Emit WebSocket
+    if (job.name === 'emitWebSocket') {
+      const { event, payload } = job.data;
+      console.log(`[BullMQ] 🌐 Emitindo WebSocket: ${event}`, payload);
+      
+      if (event === 'newAlert') {
+        this.gateway.emitNewAlert(payload);
+      } else if (event === 'alertStatusChange') {
+        this.gateway.emitAlertStatusChange(payload);
+      } else if (event === 'requestConfirmation') {
+        this.gateway.emitRequestConfirmation(payload);
+      }
+      
+      console.log(`[BullMQ] ✅ WebSocket emitido com sucesso!`);
+      return;
+    }
+
     if (job.name === 'autoConfirm') {
       const { alertId } = job.data;
       console.log(`[BullMQ] Iniciando confirmação automática para alerta ${alertId}`);
@@ -82,7 +99,8 @@ export class FallAlertsProcessor extends WorkerHost {
 
   console.log(`[BullMQ] ✅ Alerta ${alertId} está em verificação, enviando lembrete...`);
 
-  //  VERIFICAÇÃO CRÍTICA: Quantos clientes estão conectados?
+  //  VERIFICAÇÃO critica: Quantos clientes estão conectados?
+
   const roomName = `patient_${alert.patientId}`;
   
   console.log(`\n[BullMQ] 🔍 ================================`);
@@ -90,6 +108,7 @@ export class FallAlertsProcessor extends WorkerHost {
   console.log(`[BullMQ] 🔍 ================================`);
   
   // Tenta buscar os sockets conectados na sala
+  
   try {
     const sockets = await this.gateway.server?.in(roomName).fetchSockets();
     const clientCount = sockets?.length ?? 0;
@@ -135,7 +154,7 @@ export class FallAlertsProcessor extends WorkerHost {
     }
   }
 
-  // Tenta enviar WhatsApp (pode falhar por limite)
+  // Tenta enviar WhatsApp
   const contactToNotify = caregiver || await this.prismaService.emergencyContact.findFirst({
     where: { patientId: alert.patientId, priority: 1 },
   });
@@ -144,17 +163,23 @@ export class FallAlertsProcessor extends WorkerHost {
     const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
     
     try {
-      await this.twilioService.sendWhatsAppMessage(
-        contactToNotify.phone,
-        `⏰ *LEMBRETE DE VERIFICAÇÃO*\n\nPaciente: ${alert.patient.name}\nLocalização: ${googleMapsLink}\n\n⚠️ Você indicou que estava verificando. Por favor, confirme o status pelo aplicativo.`
-      );
-      console.log(`[BullMQ] ✅ WhatsApp enviado para ${contactToNotify.name}`);
+      console.log(`[BullMQ] 📤 Enviando lembrete COM BOTÕES para ${contactToNotify.name}...`);
+      
+      await this.messagingService.sendVerificationReminderWithButtons({
+        to: contactToNotify.phone,
+        alertId: alert.id,
+        patientName: alert.patient.name,
+        location: googleMapsLink,
+        contactName: contactToNotify.name,
+      });
+      
+      console.log(`[BullMQ] ✅ WhatsApp com BOTÕES enviado para ${contactToNotify.name}`);
     } catch (error) {
-      console.error(`[BullMQ] ❌ Erro ao enviar WhatsApp (limite diário atingido):`, error.message);
+      console.error(`[BullMQ] ❌ Erro ao enviar WhatsApp:`, error.message);
     }
   }
 
-  // 🚨 EMISSÃO DO EVENTO WEBSOCKET
+  //  EMISSÃO DO EVENTO WEBSOCKET
   console.log(`\n[BullMQ] 📡 ================================`);
   console.log(`[BullMQ] 📡 EMITINDO VIA WEBSOCKET`);
   console.log(`[BullMQ] 📡 ================================`);
@@ -215,11 +240,19 @@ export class FallAlertsProcessor extends WorkerHost {
 
       const googleMapsLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
 
-      // Envia WhatsApp
       try {
-        const message = `🚨 *ALERTA DE QUEDA*\n\nPaciente: ${patient.name}\n\n📍 Localização:\n${googleMapsLink}\n\nPor favor, verifique imediatamente!`;
-        await this.twilioService.sendWhatsAppMessage(priorityContact.phone, message);
-        console.log(`[BullMQ] ✅ WhatsApp enviado para ${priorityContact.name}`);
+        console.log(`[BullMQ]   Enviando WhatsApp COM BOTÕES para ${priorityContact.name}...`);
+        
+        await this.messagingService.sendFallAlertWithButtons({
+          to: priorityContact.phone,
+          alertId,
+          patientName: patient.name,
+          location: googleMapsLink,
+          contactName: priorityContact.name,
+          priority: 1,
+        });
+        
+        console.log(`[BullMQ] ✅ WhatsApp com BOTÕES enviado para ${priorityContact.name}`);
       } catch (err) {
         console.error(`[BullMQ] ❌ Erro ao enviar WhatsApp:`, err.message);
       }
@@ -268,22 +301,22 @@ export class FallAlertsProcessor extends WorkerHost {
 
       for (const contact of secondaryContacts) {
         try {
-          const message = `⚠️ *ALERTA DE QUEDA - BACKUP*\n\nO contato prioritário não respondeu!\n\nPaciente: ${patient.name}\n📍 ${googleMapsLink}\n\nPor favor, verifique imediatamente!`;
-          await this.twilioService.sendWhatsAppMessage(contact.phone, message);
-          console.log(`[BullMQ] ✅ WhatsApp enviado para ${contact.name} (prioridade ${contact.priority})`);
+          console.log(`[BullMQ] 📤 Enviando WhatsApp COM BOTÕES para ${contact.name} (backup)...`);
+          
+          await this.messagingService.sendFallAlertWithButtons({
+            to: contact.phone,
+            alertId,
+            patientName: patient.name,
+            location: googleMapsLink,
+            contactName: contact.name,
+            priority: contact.priority,
+          });
+          
+          console.log(`[BullMQ] ✅ WhatsApp com BOTÕES enviado para ${contact.name} (prioridade ${contact.priority})`);
         } catch (err) {
           console.error(`[BullMQ] ❌ Erro ao enviar WhatsApp para ${contact.name}:`, err.message);
         }
       }
-    }
-    
-    //  Job para monitorar chamadas
-    if (job.name === 'monitorCall') {
-      const { alertId, contactId, patientName } = job.data;
-      console.log(`[BullMQ] Monitorando chamada para alerta ${alertId}, contato ${contactId}`);
-
-      // Aqui você pode adicionar lógica de monitoramento de chamadas se necessário
-      console.log(`[BullMQ] ✅ Monitoramento de chamada concluído para alerta ${alertId}`);
     }
   }
 }
