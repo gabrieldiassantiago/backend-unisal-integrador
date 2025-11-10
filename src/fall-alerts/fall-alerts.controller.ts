@@ -44,73 +44,65 @@ export class FallAlertsController {
   }
 
   @Post('register-push-token')
-  @UseGuards(JwtAuthGuard)
-
-  @ApiOperation({
-    summary: 'Registrar token Expo Push',
-    description: 'App envia o token Expo para receber notificações push'
-  })
-
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        token: { type: 'string', description: 'Token Expo Push' }
-      },
-      required: ['token']
-    }
-  })
-  @ApiResponse({ status: 200, description: 'Token registrado com sucesso' })
-  async registerPushToken(
-    @Req() req,
-    @Body() { token }: { token: string }
-  ) {
-    if (!token) {
-      throw new BadRequestException('Token é obrigatório');
-    }
-
-    const userId = req.user.id; // JWT fornece o ID do usuário
-
-    try {
-      // Verificar se o token já existe para outro usuário
-      const existingToken = await this.prismaService.pushToken.findUnique({
-        where: { token },
-      });
-
-      if (existingToken && existingToken.userId !== userId) {
-        console.log(`🔄 Token transferido de ${existingToken.userId} para ${userId}`);
-      }
-
-      // Upsert: atualiza se existe, cria se não existe
-      const pushToken = await this.prismaService.pushToken.upsert({
-        where: { token },
-        update: { 
-          userId, 
-          updatedAt: new Date() 
-        },
-        create: { 
-          userId, 
-          token 
-        },
-      });
-
-      console.log(`✅ Token Expo registrado para usuário ${userId}`);
-
-      return {
-        success: true,
-        message: 'Token registrado com sucesso',
-        data: {
-          tokenId: pushToken.id,
-          registeredAt: pushToken.createdAt,
-        }
-      };
-    } catch (error) {
-      console.error('❌ Erro ao registrar token:', error);
-      throw new BadRequestException('Erro ao registrar token');
-    }
+@UseGuards(JwtAuthGuard)
+async registerPushToken(
+  @Req() req,
+  @Body('token') token: string
+) {
+  console.log('[BACKEND] req.user:', req.user);
+  
+  if (!token) {
+    throw new BadRequestException('Token é obrigatório');
   }
 
-  // 🆕 Marcar como falso alerta
+  // ✅ USA "userId" em vez de "id"
+  const userId = req.user.userId; // ← MUDOU AQUI
+  
+  if (!userId) {
+    throw new BadRequestException('Usuário não autenticado');
+  }
+
+  console.log('[BACKEND] User ID:', userId);
+
+  try {
+    const existingToken = await this.prismaService.pushToken.findUnique({
+      where: { token },
+    });
+
+    if (existingToken && existingToken.userId !== userId) {
+      console.log(`Token transferido de ${existingToken.userId} para ${userId}`);
+    }
+
+    const pushToken = await this.prismaService.pushToken.upsert({
+      where: { token },
+      update: { 
+        userId, 
+        updatedAt: new Date() 
+      },
+      create: { 
+        userId, 
+        token 
+      },
+    });
+
+    console.log(`Token salvo! ID: ${pushToken.id}`);
+
+    return {
+      success: true,
+      message: 'Token registrado com sucesso',
+      data: {
+        tokenId: pushToken.id,
+        registeredAt: pushToken.createdAt,
+      }
+    };
+  } catch (error) {
+    console.error('Erro ao registrar token:', error);
+    throw new BadRequestException('Erro ao registrar token');
+  }
+}
+
+
+  //  Marcar como falso alerta
   @Patch(':id/false-alarm')
   @ApiOperation({
     summary: 'Marcar alerta como falso',
@@ -126,7 +118,7 @@ export class FallAlertsController {
     return this.fallAlertsService.markFalseAlarm(id, body.caregiverId);
   }
 
-  // 🆕 Marcar como "estou indo verificar"
+  //  Marcar como "estou indo verificar"
   @Patch(':id/verifying')
   @ApiOperation({
     summary: 'Marcar que está verificando',
@@ -142,7 +134,7 @@ export class FallAlertsController {
     return this.fallAlertsService.markVerifying(id, body.caregiverId);
   }
 
-  // 🆕 Confirmar após verificação
+  //  Confirmar após verificação
   @Patch(':id/confirm-after-verification')
   @ApiOperation({
     summary: 'Confirmar alerta após verificação',
