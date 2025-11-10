@@ -100,15 +100,12 @@ export class AuthController {
       }
     }
   })
+  
   async familyLogin(@Body() loginDto: FamilyMemberLoginDto) {
     const user = await this.authService.validateUser(loginDto.email, loginDto.password);
 
     if (!user) {
       throw new UnauthorizedException('E-mail ou senha inválidos.');
-    }
-
-    if (user.role?.toString() !== 'FAMILY_MEMBER') {
-      throw new UnauthorizedException('Este endpoint é apenas para familiares. Use /auth/login para cuidadores.');
     }
     
     return this.authService.login(user);
