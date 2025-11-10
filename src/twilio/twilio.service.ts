@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Twilio } from 'twilio';
 import {
@@ -14,13 +14,17 @@ import {
   AlertResolvedTemplateParams,
   CallAnsweredTemplateParams
 } from './templates';
+import { MessagingService } from '../messaging/messaging.service';
 
 @Injectable()
-
 export class TwilioService {
+  private readonly logger = new Logger(TwilioService.name);
   public client: Twilio;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly messagingService: MessagingService, // 🆕 Usar MessagingService
+  ) {
     this.client = new Twilio(
       this.configService.get<string>('TWILIO_ACCOUNT_SID'),
       this.configService.get<string>('TWILIO_AUTH_TOKEN'),
@@ -28,6 +32,17 @@ export class TwilioService {
   }
 
   async makeFallAlertCall(to: string, patientName: string) {
+    this.logger.log('[TwilioService] 📞 Chamadas Twilio desativadas temporariamente');
+    this.logger.log('[TwilioService] Enviando apenas WhatsApp via Infobip para:', to);
+    
+    // Retornar objeto simulado para não quebrar o fluxo
+    return {
+      sid: 'TWILIO_DISABLED',
+      status: 'disabled',
+      message: 'Twilio calls are currently disabled, using Infobip WhatsApp only'
+    };
+    
+    /* TWILIO CALLS DESATIVADAS TEMPORARIAMENTE
     console.log('[TwilioService] Fazendo chamada para:', to);
     console.log('[TwilioService] Paciente:', patientName);
 
@@ -42,27 +57,21 @@ export class TwilioService {
     } catch (error: any) {
       throw error;
     }
+    */
   }
 
   async sendWhatsAppMessage(to: string, message: string) {
-    console.log('[TwilioService] Enviando WhatsApp para:', to);
-    console.log('[TwilioService] Mensagem:', message);
-
+    this.logger.log('[TwilioService] � Enviando via API de Mensagens');
+    this.logger.log(`[TwilioService] Para: ${to}`);
+    
+    // 🆕 USAR API DE MENSAGENS DIRETAMENTE
     try {
-      const cleanNumber = to.replace(/\D/g, '');
-      const whatsappNumber = `whatsapp:+${cleanNumber}`;
-      
-      const messageResponse = await this.client.messages.create({
-        from: this.configService.get<string>('TWILIO_WHATSAPP_NUMBER'),
-        to: whatsappNumber,
-        body: message
-      });
-
-      console.log('[TwilioService] WhatsApp enviado com sucesso. SID:', messageResponse.sid);
-      return messageResponse;
+      const response = await this.messagingService.sendText(to, message);
+      this.logger.log('[TwilioService] ✅ Mensagem enviada com sucesso');
+      return response;
     } catch (error: any) {
-      console.error('[TwilioService] Erro ao enviar WhatsApp:', error);
-      throw error;
+      this.logger.error('[TwilioService] ❌ Erro ao enviar mensagem:', error.message);
+      throw new Error(`Falha ao enviar mensagem: ${error.message}`);
     }
   }
 
