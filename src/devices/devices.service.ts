@@ -7,6 +7,7 @@ import * as bcrypt from 'bcrypt';
 import { noFoundUser } from 'src/errors/noFoundUser';
 import { Device, DeviceStatus } from '@src/types/device.type';
 import { DeviceStatusGateway } from './device-status.gateway';
+import { off } from 'process';
 
 @Injectable()
 export class DevicesService {
@@ -184,7 +185,6 @@ export class DevicesService {
    * Marca dispositivos como offline se não enviaram heartbeat
    * a mais de X minutos (executado periodicamente)
    */
-
   async checkOfflineDevices() {
     const OFFLINE_THRESHOLD_MINUTES = 5;
     const thresholdDate = new Date();
@@ -199,28 +199,49 @@ export class DevicesService {
           { lastHeartbeatAt: null },
         ],
       },
-      include: { patient: true },
+      select: {
+        id: true,
+        deviceIdentifier: true,
+        patientId: true,
+        lastHeartbeatAt: true,
+        patient: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
 
-    // Marca como offline e emite eventos
-    for (const device of devicesGoingOffline) {
-      await this.prismaService.device.update({
-        where: { id: device.id },
-        data: { isOnline: false },
+    if (devicesGoingOffline.length > 0) {
+      // Marca como offline
+      const deviceIds = devicesGoingOffline.map(d => d.id);
+      
+      await this.prismaService.device.updateMany({
+        where: {
+          id: { in: deviceIds },
+        },
+        data: {
+          isOnline: false,
+        },
       });
 
-      if (device.patientId) {
-        await this.deviceStatusGateway.emitDeviceOffline({
-          deviceId: device.id,
-          deviceIdentifier: device.deviceIdentifier,
-          patientId: device.patientId,
-        });
+      // Emite eventos WebSocket para cada dispositivo
+      for (const device of devicesGoingOffline) {
+        if (device.patientId) {
+          await this.deviceStatusGateway.emitDeviceOffline({
+            deviceId: device.id,
+            deviceIdentifier: device.deviceIdentifier,
+            patientId: device.patientId,
+          });
+        }
       }
     }
 
     return {
       checked: new Date(),
       devicesMarkedOffline: devicesGoingOffline.length,
+      offlineDeviceIds: devicesGoingOffline.map(d => d.id), // IDs para notificação
     };
   }
 
@@ -263,4 +284,6 @@ export class DevicesService {
       ipAddress: device.ipAddress ?? undefined,
     }));
   }
+
+  
 }
