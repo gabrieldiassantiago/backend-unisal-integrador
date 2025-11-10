@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import {PrismaService} from '../prisma/prisma.service'
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid'; 
+import { LoginResponseDto } from './dtos/login-response.dto';
+import { SessionService } from './session.service';
 
 
 @Injectable()
@@ -10,39 +12,44 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private sessionService: SessionService,
   ) {}
 
-  // Método atualizado para suportar CAREGIVER e FAMILY_MEMBER
+  // Método para suportar CAREGIVER e FAMILY_MEMBER
+
   async validateUser(email: string, password: string) {
+    
     const user = await this.prisma.user.findUnique({ where: { email } });
 
-    if (!user) return null;
+    if (!user) return {
+      message: 'Usuário não encontrado',
+    };
 
     // Permite login apenas de CAREGIVER e FAMILY_MEMBER (não PATIENT)
-    if (user.role?.toString() !== 'CAREGIVER' && user.role?.toString() !== 'FAMILY_MEMBER') return null;
+    if (user.role?.toString() !== 'CAREGIVER' && user.role?.toString() !== 'FAMILY_MEMBER') return {
+      message: 'Acesso negado',
+    };
 
     // Verifica se tem senha definida
-    if (!user.password) return null;
-
-    // ✅ Não precisa verificar emailVerified pois usuário só é criado após verificação
+    if (!user.password) return {
+      message: 'Senha não definida',
+    };
 
     const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return null;
+    if (!ok) return {
+      message: 'Senha incorreta',
+    };
 
     const { password: _, ...result } = user;
     return result;
   }
 
 
-  async login(user: any) {
+  async login(user: any) : Promise <LoginResponseDto> {
 
-    const sessionId = uuidv4();
+    // Criar uma nova sessão
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { currentSessionId: sessionId },
-    });
-  
+    const sessionId = await this.sessionService.createSession(user.id);
 
     let payload: any = { 
       sub: user.id, 
@@ -94,6 +101,7 @@ export class AuthService {
       user: payload,
     };
   }
+  
 
     /*
     async resetPassword(email: string, password: string) {
@@ -116,10 +124,12 @@ export class AuthService {
   } 
   */
  
-  async logout(userId: string) {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { currentSessionId: null },
-    })
+  async logout(userId: string) : Promise<{ message: string }> {
+   
+    await this.sessionService.invalidateSession(userId);
+
+    return {
+      message: "Logout realizado com sucesso"
+    };
   }
 }
