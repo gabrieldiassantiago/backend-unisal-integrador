@@ -4,6 +4,7 @@ import { DevicesController } from './devices.controller';
 import { DeviceStatusGateway } from './device-status.gateway';
 import { DeviceMonitorService } from './device-monitor.service';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { MessagingService } from '@src/messaging/messaging.service';
 
 @Module({
   providers: [
@@ -11,6 +12,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
     PrismaService, 
     DeviceStatusGateway,
     DeviceMonitorService,
+    MessagingService
   ],
   controllers: [DevicesController],
   exports: [DeviceStatusGateway],
