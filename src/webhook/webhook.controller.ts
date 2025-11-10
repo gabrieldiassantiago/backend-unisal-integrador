@@ -14,6 +14,7 @@ export class WebhookController {
   /**
    * Webhook para receber eventos da Evolution API
    */
+
   @Post('evolution')
   async handleEvolutionWebhook(@Body() payload: any, @Headers() headers: any) {
     this.logger.log('📥 ================================');
@@ -37,11 +38,11 @@ export class WebhookController {
         return await this.handleMessageUpdate(data);
       }
 
-      this.logger.log(`ℹ️ Evento ignorado: ${event}`);
+      this.logger.log(`Evento ignorado: ${event}`);
       return { status: 'ignored', event };
 
     } catch (error: any) {
-      this.logger.error('❌ Erro ao processar webhook:', error.message);
+      this.logger.error(' Erro ao processar webhook:', error.message);
       this.logger.error(error.stack);
       return { status: 'error', message: error.message };
     }
