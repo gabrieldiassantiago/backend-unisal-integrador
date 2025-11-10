@@ -6,8 +6,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { FallAlertsGateway } from './fall-alerts.gateway';
 import { FallAlertsProcessor } from './fall-alerts.processor';
 import { BullModule } from '@nestjs/bullmq';
-import { TwilioService } from 'src/twilio/twilio.service';
 import { FamilyModule } from 'src/family/family.module';
+import { MessagingModule } from 'src/messaging/messaging.module';
 
 @Module({
   providers: [
@@ -15,7 +15,6 @@ import { FamilyModule } from 'src/family/family.module';
     PrismaService,
     FallAlertsGateway,
     FallAlertsProcessor,
-    TwilioService,
   ],
   controllers: [FallAlertsController],
   imports: [
@@ -23,6 +22,7 @@ import { FamilyModule } from 'src/family/family.module';
       name: 'fall-alerts',
     }),
     FamilyModule,
+    MessagingModule,
   ],
 })
 export class FallAlertsModule {}
