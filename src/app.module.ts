@@ -14,19 +14,12 @@ import { FamilyModule } from './family/family.module';
 import { ConfigModule } from '@nestjs/config';
 import { TwilioModule } from './twilio/twillio.module';
 import { GeoModule } from './geo_reverse/geo.module';
+import { InfobipModule } from './infobip/infobip.module';
+import { MessagingModule } from './messaging/messaging.module';
+import { WebhookModule } from './webhook/webhook.module';
 
 @Module({
   imports: [
-    UsersModule,
-    DevicesModule,
-    AuthModule,
-    FallAlertsModule,
-    EmergencyContactsModule,
-    CaregiverModule,
-    PatientModule,
-    FamilyModule,
-    TwilioModule,
-    GeoModule,
     ConfigModule.forRoot({
       isGlobal: true
     }),
@@ -38,7 +31,19 @@ import { GeoModule } from './geo_reverse/geo.module';
         password: 'intelisensor'
       },
     }),
-
+    MessagingModule, // 🆕 API de mensagens principal
+    WebhookModule, // 🆕 Receber cliques de botões do WhatsApp
+    InfobipModule,
+    TwilioModule,
+    GeoModule,
+    UsersModule,
+    DevicesModule,
+    AuthModule,
+    FallAlertsModule,
+    EmergencyContactsModule,
+    CaregiverModule,
+    PatientModule,
+    FamilyModule,
   ],
   controllers: [AppController],
   providers: [AppService],

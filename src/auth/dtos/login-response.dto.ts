@@ -1,23 +1,27 @@
-import { ApiProperty } from '@nestjs/swagger';
+// auth/dto/login-response.dto.ts
+export interface PatientAccess {
+  patientId: string;
+  patientName: string;
+  permissions: {
+    canViewAlerts: boolean;
+    canRespondAlerts: boolean;
+    canViewProfile: boolean;
+    canEditProfile: boolean;
+    canManageContacts: boolean;
+    canInviteFamily: boolean;
+  };
+}
 
-export class UserPayloadDto {
-  @ApiProperty({ description: 'ID do usuário', example: 'uuid-string' })
+export interface JwtPayload {
   sub: string;
-
-  @ApiProperty({ description: 'Email do usuário', example: 'user@example.com' })
   email: string;
-
-  @ApiProperty({ description: 'Papel do usuário', example: 'CAREGIVER', enum: ['CAREGIVER'] })
   role: string;
-
-  @ApiProperty({ description: 'Nome do usuário', example: 'João Silva' })
   name: string;
+  sessionId: string;
+  patientAccess?: PatientAccess[];
 }
 
 export class LoginResponseDto {
-  @ApiProperty({ description: 'Token JWT de acesso', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
   access_token: string;
-
-  @ApiProperty({ description: 'Dados do usuário logado', type: UserPayloadDto })
-  user: UserPayloadDto;
+  user: JwtPayload;
 }

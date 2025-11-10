@@ -1,9 +1,11 @@
 import { Module } from "@nestjs/common";
+import { ConfigModule } from '@nestjs/config';
 import { TwilioService } from "./twilio.service";
 import { VoiceController } from "./voice.controller";
+import { MessagingModule } from '../messaging/messaging.module';
 
 @Module({
-  imports: [],
+  imports: [ConfigModule, MessagingModule],
   providers: [TwilioService],
   controllers: [VoiceController],
   exports: [TwilioService],
