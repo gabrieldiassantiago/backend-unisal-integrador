@@ -12,7 +12,7 @@ export class FallAlertsController {
   constructor(
     private readonly fallAlertsService: FallAlertsService,
     private readonly prismaService: PrismaService,
-  ) {}
+  ) { }
 
   @Post()
   @ApiOperation({
@@ -24,82 +24,100 @@ export class FallAlertsController {
     return this.fallAlertsService.createAlert(data);
   }
 
-  @Get()
+  @Get('patient/:patientId')
   @ApiOperation({
-    summary: 'Listar alertas por paciente',
-    description: 'Retorna todos os alertas de queda de um paciente específico'
+    summary: 'Listar alertas por paciente (paginado)',
   })
   @ApiQuery({
-    name: 'patientId',
-    description: 'UUID do paciente',
-    type: 'string',
-    required: true,
+    name: 'page',
+    required: false,
+    description: 'Número da página (padrão: 1)',
   })
-  async getAlerts(@Query('patientId') patientId: string) {
-    if (!patientId) {
-      throw new BadRequestException('O ID do paciente é obrigatório');
+  @ApiQuery({
+    name: 'perPage',
+    required: false,
+    description: 'Quantidade por página (padrão: 10)',
+  })
+  async getAlertsByPatient(
+    @Param('patientId') patientId: string,
+    @Query('page') page = '1',
+    @Query('perPage') perPage = '10',
+  ) {
+    const pageNumber = Number(page);
+    const perPageNumber = Number(perPage);
+
+    if (isNaN(pageNumber) || pageNumber < 1) {
+      throw new BadRequestException('page deve ser um número >= 1');
+    }
+    if (isNaN(perPageNumber) || perPageNumber < 1) {
+      throw new BadRequestException('perPage deve ser um número >= 1');
     }
 
-    return this.fallAlertsService.getAlertsByPatient(patientId);
+    return this.fallAlertsService.getAlertsByPatient(
+      patientId,
+      pageNumber,
+      perPageNumber,
+    );
   }
+
 
   @Post('register-push-token')
-@UseGuards(JwtAuthGuard)
-async registerPushToken(
-  @Req() req,
-  @Body('token') token: string
-) {
-  console.log('[BACKEND] req.user:', req.user);
-  
-  if (!token) {
-    throw new BadRequestException('Token é obrigatório');
-  }
+  @UseGuards(JwtAuthGuard)
+  async registerPushToken(
+    @Req() req,
+    @Body('token') token: string
+  ) {
+    console.log('[BACKEND] req.user:', req.user);
 
-  // ✅ USA "userId" em vez de "id"
-  const userId = req.user.userId; // ← MUDOU AQUI
-  
-  if (!userId) {
-    throw new BadRequestException('Usuário não autenticado');
-  }
-
-  console.log('[BACKEND] User ID:', userId);
-
-  try {
-    const existingToken = await this.prismaService.pushToken.findUnique({
-      where: { token },
-    });
-
-    if (existingToken && existingToken.userId !== userId) {
-      console.log(`Token transferido de ${existingToken.userId} para ${userId}`);
+    if (!token) {
+      throw new BadRequestException('Token é obrigatório');
     }
 
-    const pushToken = await this.prismaService.pushToken.upsert({
-      where: { token },
-      update: { 
-        userId, 
-        updatedAt: new Date() 
-      },
-      create: { 
-        userId, 
-        token 
-      },
-    });
+    // ✅ USA "userId" em vez de "id"
+    const userId = req.user.userId; // ← MUDOU AQUI
 
-    console.log(`Token salvo! ID: ${pushToken.id}`);
+    if (!userId) {
+      throw new BadRequestException('Usuário não autenticado');
+    }
 
-    return {
-      success: true,
-      message: 'Token registrado com sucesso',
-      data: {
-        tokenId: pushToken.id,
-        registeredAt: pushToken.createdAt,
+    console.log('[BACKEND] User ID:', userId);
+
+    try {
+      const existingToken = await this.prismaService.pushToken.findUnique({
+        where: { token },
+      });
+
+      if (existingToken && existingToken.userId !== userId) {
+        console.log(`Token transferido de ${existingToken.userId} para ${userId}`);
       }
-    };
-  } catch (error) {
-    console.error('Erro ao registrar token:', error);
-    throw new BadRequestException('Erro ao registrar token');
+
+      const pushToken = await this.prismaService.pushToken.upsert({
+        where: { token },
+        update: {
+          userId,
+          updatedAt: new Date()
+        },
+        create: {
+          userId,
+          token
+        },
+      });
+
+      console.log(`Token salvo! ID: ${pushToken.id}`);
+
+      return {
+        success: true,
+        message: 'Token registrado com sucesso',
+        data: {
+          tokenId: pushToken.id,
+          registeredAt: pushToken.createdAt,
+        }
+      };
+    } catch (error) {
+      console.error('Erro ao registrar token:', error);
+      throw new BadRequestException('Erro ao registrar token');
+    }
   }
-}
 
 
   //  Marcar como falso alerta
