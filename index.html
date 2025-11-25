@@ -1,104 +1,426 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>InteliSensor</title>
-  <style>
-    html, body { margin: 0; padding: 0; background: #000; color: #fff; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; scroll-behavior: smooth; }
-    section { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    h1,h2,h3 { font-weight: 600; margin: 0 0 15px 0; }
-    h1 { font-size: 72px; letter-spacing: -2px; background: linear-gradient(90deg,#fff,#aaa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .subtitle { font-size: 22px; color: #cfcfcf; margin-bottom: 40px; }
-    .device-img, .icon { width: 180px; height: 180px; margin: 50px 0; object-fit: contain; filter: drop-shadow(0 8px 32px #0071e385); }
-    .feature-card { background: #18181a; border-radius: 25px; padding: 36px 28px; max-width: 320px; margin: 20px; box-shadow: 0 14px 48px #0071e328; }
-    .feature-icon { font-size: 56px; margin-bottom: 18px; }
-    .feature-title { font-size: 22px; margin-bottom: 10px; }
-    .feature-desc { font-size: 17px; color: #cfcfcf; }
-    .timeline { margin: 70px 0 40px 0; width: 320px; max-width: 95vw; }
-    .timeline-point { margin-bottom: 60px; }
-    .timeline-num { font-size: 82px; color: #111; opacity: .12; font-weight: 700; margin-bottom: 16px; }
-    .timeline-title { font-size: 27px; font-weight: 600; }
-    .timeline-desc { font-size: 18px; color: #b8b8b8; margin-bottom: 5px; }
-    .gradient-block { width: 220px; height: 120px; border-radius:16px; margin:30px 0; background: linear-gradient(100deg,#0071e3 0,#1dd3b0 100%); display: flex; justify-content: center; align-items: center; }
-    .cta { display: block; background: #0071e3; color: #fff; text-decoration: none; border-radius: 999px; font-size: 19px; font-weight: 600; padding: 18px 52px; margin: 60px 0 0 0; transition: background .2s; }
-    .cta:hover { background: #0095ff; }
-    footer { font-size: 26px; letter-spacing: 8px; margin: 80px 0 20px 0; text-align: center; opacity: 0.8;}
-    /* Animations */
-    .fade { opacity:0; transform:translateY(62px); transition:all 1.2s cubic-bezier(.22,.68,.43,1.01);}
-    .fade.visible { opacity:1; transform:translateY(0);}
-    @media (max-width:700px){ h1{font-size:42px;} section{padding:18px;} .feature-card{max-width:99vw;} .device-img,.icon{width:116px;height:116px;} }
-  </style>
-</head>
-<body>
-  <!-- Hero -->
-  <section>
-    <h1 class="fade">InteliSensor</h1>
-    <div class="subtitle fade">Segurança invisível, cuidado real.</div>
-    <img src="https://developer.apple.com/design/human-interface-guidelines/images/SF-Symbols.svg" class="device-img fade" alt="Dispositivo InteliSensor">
-  </section>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyFlow OS - Full</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
-  <!-- Features -->
-  <section>
-    <div class="feature-card fade">
-      <div class="feature-icon">📍</div>
-      <div class="feature-title">Detecção de Quedas</div>
-      <div class="feature-desc">Sensores precisos, resposta em menos de 1 segundo.</div>
-    </div>
-    <div class="feature-card fade">
-      <div class="feature-icon">🎙️</div>
-      <div class="feature-title">Alerta por Voz</div>
-      <div class="feature-desc">Reconhecimento instantâneo de comandos de socorro.</div>
-    </div>
-    <div class="feature-card fade">
-      <div class="feature-icon">🔋</div>
-      <div class="feature-title">Bateria Longa</div>
-      <div class="feature-desc">Até 7 dias sem recarregar. Pronto 24h.</div>
-    </div>
-    <div class="feature-card fade">
-      <div class="feature-icon">🔒</div>
-      <div class="feature-title">Privacidade Apple</div>
-      <div class="feature-desc">Sem câmeras. Sem invasão. Só tecnologia que respeita.</div>
-    </div>
-  </section>
-
-  <!-- Timeline -->
-  <section>
-    <div class="timeline">
-      <div class="timeline-point fade">
-        <div class="timeline-num">1</div>
-        <div class="timeline-title">O Problema</div>
-        <div class="timeline-desc">Milhões de idosos sem proteção doméstica adequada. Quedas fatais todo dia.</div>
-      </div>
-      <div class="timeline-point fade">
-        <div class="timeline-num">2</div>
-        <div class="timeline-title">A Solução</div>
-        <div class="timeline-desc">Dispositivo não invasivo, com sensores e IA embarcada.</div>
-      </div>
-      <div class="timeline-point fade">
-        <div class="timeline-num">3</div>
-        <div class="timeline-title">O Impacto</div>
-        <div class="timeline-desc">Mais tranquilidade para famílias, menos tragédias, dignidade preservada.</div>
-      </div>
-    </div>
-    <div class="gradient-block fade"><span style="font-size:31px;">🤍</span></div>
-    <a href="#contato" class="cta fade">Quero conhecer</a>
-  </section>
-
-  <!-- Footer Logo -->
-  <footer>INTELISENSOR</footer>
-  <script>
-    // Animate on scroll
-    function revealOnScroll() {
-      document.querySelectorAll('.fade').forEach(el => {
-        const rect = el.getBoundingClientRect();
-        if(rect.top < window.innerHeight - 60) {
-          el.classList.add('visible');
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        apple: {
+                            bg: '#F5F5F7',
+                            text: '#1D1D1F',
+                            gray: '#86868B',
+                            blue: '#007AFF',
+                            green: '#34C759',
+                            orange: '#FF9500',
+                            red: '#FF3B30',
+                            purple: '#AF52DE'
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.4s ease-out forwards',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
         }
-      });
-    }
-    window.addEventListener('scroll', revealOnScroll);
-    window.addEventListener('load', revealOnScroll);
-  </script>
+    </script>
+
+    <style>
+        body {
+            background-color: #F5F5F7;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,0) 0, hsla(253,16%,7%,0) 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0) 0, hsla(225,39%,30%,0) 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,0) 0, hsla(339,49%,30%,0) 50%);
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+        }
+        
+        /* Toggle Switch iOS Style */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #34C759;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #34C759;
+        }
+    </style>
+</head>
+<body class="text-apple-text h-screen overflow-hidden flex p-4 md:p-6 gap-6 select-none">
+
+    <aside class="hidden md:flex flex-col w-24 glass-card rounded-[32px] items-center py-8 justify-between z-20">
+        <div class="flex flex-col gap-8 items-center w-full">
+            <div class="w-12 h-12 bg-apple-text text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg mb-4">
+                <i class="ph-bold ph-brain"></i>
+            </div>
+            
+            <nav class="flex flex-col gap-6 w-full items-center px-4">
+                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn p-3 rounded-2xl bg-white shadow-sm text-apple-blue transition-all hover:scale-110 w-full flex justify-center">
+                    <i class="ph-bold ph-squares-four text-xl"></i>
+                </button>
+                
+                <button onclick="switchTab('calendar')" id="nav-calendar" class="nav-btn p-3 rounded-2xl text-gray-400 hover:bg-white/50 hover:text-apple-text transition-all hover:scale-110 w-full flex justify-center">
+                    <i class="ph-bold ph-calendar-blank text-xl"></i>
+                </button>
+                
+                <button onclick="switchTab('stats')" id="nav-stats" class="nav-btn p-3 rounded-2xl text-gray-400 hover:bg-white/50 hover:text-apple-text transition-all hover:scale-110 w-full flex justify-center">
+                    <i class="ph-bold ph-chart-bar text-xl"></i>
+                </button>
+                
+                <button onclick="switchTab('settings')" id="nav-settings" class="nav-btn p-3 rounded-2xl text-gray-400 hover:bg-white/50 hover:text-apple-text transition-all hover:scale-110 w-full flex justify-center">
+                    <i class="ph-bold ph-gear text-xl"></i>
+                </button>
+            </nav>
+        </div>
+        
+        <button class="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-md">
+            <img src="https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff" alt="User">
+        </button>
+    </aside>
+
+    <main class="flex-1 h-full relative">
+        
+        <div id="view-dashboard" class="view-section h-full flex flex-col gap-6 animate-fade-in">
+            <header class="flex justify-between items-end px-2">
+                <div>
+                    <p class="text-apple-gray font-medium text-sm uppercase tracking-wider mb-1">Visão Geral</p>
+                    <h1 class="text-4xl font-bold tracking-tight">Bom dia, Estudante.</h1>
+                </div>
+                <button onclick="alert('Funcionalidade demonstrada no código anterior!')" class="flex items-center gap-2 bg-apple-text text-white px-6 py-3 rounded-full shadow-lg hover:bg-black transition-all active:scale-95">
+                    <i class="ph-bold ph-plus"></i> <span class="font-medium">Nova Tarefa</span>
+                </button>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 h-full pb-6 overflow-y-auto no-scrollbar pr-2">
+                <div class="glass-card rounded-[32px] p-8 md:col-span-2 flex flex-col justify-between relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                    <div class="flex justify-between items-center z-10">
+                        <div class="flex gap-2 items-center bg-white/50 px-3 py-1 rounded-full w-fit backdrop-blur-sm">
+                            <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                            <span class="text-xs font-semibold text-gray-600">Foco</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-center justify-center my-4">
+                        <div class="text-8xl font-bold tracking-tighter font-mono text-apple-text">25:00</div>
+                        <p class="text-apple-gray font-medium mt-2">Engenharia de Computação</p>
+                    </div>
+                    <div class="flex gap-4 justify-center z-10">
+                        <button class="w-16 h-16 rounded-full bg-apple-text text-white flex items-center justify-center text-2xl shadow-xl hover:scale-105"><i class="ph-fill ph-play"></i></button>
+                    </div>
+                </div>
+                <div class="glass-card rounded-[32px] p-6 flex flex-col gap-4">
+                    <h3 class="font-semibold text-lg flex items-center gap-2"><i class="ph-duotone ph-clock text-apple-blue"></i> Próximas</h3>
+                    <div class="p-4 rounded-2xl bg-white/60 border border-white/40 shadow-sm">
+                        <div class="flex justify-between mb-1"><span class="text-xs font-bold text-apple-blue bg-blue-100 px-2 rounded">14:00</span></div>
+                        <p class="font-semibold text-sm">Cálculo Integral</p>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-white/40 border border-white/20 opacity-75">
+                        <div class="flex justify-between mb-1"><span class="text-xs font-bold text-purple-600 bg-purple-100 px-2 rounded">16:00</span></div>
+                        <p class="font-semibold text-sm">Programação em C</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-[32px] p-6 md:col-span-1 flex flex-col">
+                    <h3 class="font-semibold text-lg mb-4">Tarefas</h3>
+                    <div class="flex flex-col gap-2">
+                        <label class="flex items-center gap-3 p-3 rounded-xl hover:bg-white/50 cursor-pointer">
+                            <input type="checkbox" class="w-5 h-5 rounded-md border-gray-300 text-apple-blue focus:ring-0">
+                            <span class="text-sm font-medium text-gray-700">Ler artigo de UX</span>
+                        </label>
+                        <label class="flex items-center gap-3 p-3 rounded-xl hover:bg-white/50 cursor-pointer">
+                            <input type="checkbox" checked class="w-5 h-5 rounded-md border-gray-300 text-apple-blue focus:ring-0">
+                            <span class="text-sm font-medium text-gray-400 line-through">Revisar PR</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-calendar" class="view-section h-full flex-col gap-6 hidden animate-fade-in">
+            <header class="flex justify-between items-end px-2">
+                <div>
+                    <p class="text-apple-gray font-medium text-sm uppercase tracking-wider mb-1">Agenda Acadêmica</p>
+                    <h1 class="text-4xl font-bold tracking-tight">Novembro 2025</h1>
+                </div>
+                <div class="flex gap-2">
+                    <button class="w-10 h-10 rounded-full bg-white/50 hover:bg-white flex items-center justify-center transition"><i class="ph-bold ph-caret-left"></i></button>
+                    <button class="w-10 h-10 rounded-full bg-white/50 hover:bg-white flex items-center justify-center transition"><i class="ph-bold ph-caret-right"></i></button>
+                </div>
+            </header>
+
+            <div class="flex-1 glass-card rounded-[32px] p-6 flex gap-6 overflow-hidden">
+                <div class="flex-1 flex flex-col h-full">
+                    <div class="grid grid-cols-7 mb-4 text-center text-gray-400 font-medium text-sm">
+                        <div>DOM</div><div>SEG</div><div>TER</div><div>QUA</div><div>QUI</div><div>SEX</div><div>SÁB</div>
+                    </div>
+                    <div class="grid grid-cols-7 grid-rows-5 gap-2 flex-1">
+                        <div class="p-2"></div><div class="p-2"></div><div class="p-2"></div>
+                        <div class="p-2 rounded-xl hover:bg-white/40 cursor-pointer border border-transparent hover:border-white/50 transition flex flex-col items-center"><span class="text-sm">1</span></div>
+                        <div class="p-2 rounded-xl hover:bg-white/40 cursor-pointer transition flex flex-col items-center"><span class="text-sm">2</span></div>
+                        <div class="p-2 rounded-xl hover:bg-white/40 cursor-pointer transition flex flex-col items-center"><span class="text-sm">3</span></div>
+                        <div class="p-2 rounded-xl hover:bg-white/40 cursor-pointer transition flex flex-col items-center"><span class="text-sm">4</span></div>
+                        <div class="p-2 rounded-xl hover:bg-white/40 cursor-pointer transition flex flex-col items-center"><span class="text-sm">20</span></div>
+                        <div class="p-2 rounded-xl hover:bg-white/40 cursor-pointer transition flex flex-col items-center"><span class="text-sm">21</span></div>
+                        
+                        <div class="bg-apple-text text-white rounded-xl shadow-lg flex flex-col items-center justify-between p-2 cursor-pointer">
+                            <span class="font-bold">22</span>
+                            <div class="flex gap-1">
+                                <div class="w-1.5 h-1.5 rounded-full bg-apple-blue"></div>
+                                <div class="w-1.5 h-1.5 rounded-full bg-apple-orange"></div>
+                            </div>
+                        </div>
+                        <div class="p-2 rounded-xl hover:bg-white/40 cursor-pointer transition flex flex-col items-center"><span class="text-sm">23</span></div>
+                        <div class="p-2 rounded-xl hover:bg-white/40 cursor-pointer transition flex flex-col items-center"><span class="text-sm">24</span></div>
+                    </div>
+                </div>
+
+                <div class="w-72 border-l border-gray-200/30 pl-6 flex flex-col gap-4">
+                    <h3 class="font-bold text-lg">Hoje, 22 Nov</h3>
+                    
+                    <div class="relative pl-4 border-l-2 border-apple-blue">
+                        <p class="text-xs text-gray-500 mb-0.5">09:00 - 10:30</p>
+                        <p class="font-semibold text-sm">Física III</p>
+                        <p class="text-xs text-gray-400">Sala B-204</p>
+                    </div>
+                    
+                    <div class="relative pl-4 border-l-2 border-apple-orange">
+                        <p class="text-xs text-gray-500 mb-0.5">14:00 - 16:00</p>
+                        <p class="font-semibold text-sm">Projeto InteliSensor</p>
+                        <p class="text-xs text-gray-400">Lab de Hardware</p>
+                    </div>
+
+                    <div class="mt-auto p-4 rounded-2xl bg-gradient-to-br from-apple-blue to-blue-600 text-white shadow-lg">
+                        <p class="text-xs opacity-80 mb-1">Lembrete</p>
+                        <p class="font-medium text-sm">Entregar lista de integrais até 23:59</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-stats" class="view-section h-full flex-col gap-6 hidden animate-fade-in">
+            <header class="px-2">
+                <p class="text-apple-gray font-medium text-sm uppercase tracking-wider mb-1">Performance</p>
+                <h1 class="text-4xl font-bold tracking-tight">Seu Progresso</h1>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 h-full pb-6 overflow-y-auto no-scrollbar">
+                
+                <div class="glass-card rounded-[32px] p-6 md:col-span-2 flex flex-col">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-semibold text-lg">Foco Semanal (Horas)</h3>
+                        <select class="bg-transparent text-sm font-medium text-gray-500 outline-none"><option>Esta Semana</option></select>
+                    </div>
+                    <div class="flex-1 flex items-end justify-between gap-4 px-4">
+                        <div class="flex flex-col items-center gap-2 w-full group">
+                            <div class="w-full bg-gray-200 rounded-t-lg h-32 relative overflow-hidden">
+                                <div class="absolute bottom-0 w-full bg-apple-blue h-[40%] group-hover:h-[45%] transition-all duration-500 rounded-t-lg"></div>
+                            </div>
+                            <span class="text-xs font-medium text-gray-500">S</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2 w-full group">
+                            <div class="w-full bg-gray-200 rounded-t-lg h-32 relative overflow-hidden">
+                                <div class="absolute bottom-0 w-full bg-apple-blue h-[70%] group-hover:h-[75%] transition-all duration-500 rounded-t-lg"></div>
+                            </div>
+                            <span class="text-xs font-medium text-gray-500">T</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2 w-full group">
+                            <div class="w-full bg-gray-200 rounded-t-lg h-32 relative overflow-hidden">
+                                <div class="absolute bottom-0 w-full bg-apple-blue h-[30%] group-hover:h-[35%] transition-all duration-500 rounded-t-lg"></div>
+                            </div>
+                            <span class="text-xs font-medium text-gray-500">Q</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2 w-full group">
+                            <div class="w-full bg-gray-200 rounded-t-lg h-32 relative overflow-hidden">
+                                <div class="absolute bottom-0 w-full bg-apple-blue h-[90%] group-hover:h-[95%] transition-all duration-500 rounded-t-lg shadow-[0_0_15px_rgba(0,122,255,0.4)]"></div>
+                            </div>
+                            <span class="text-xs font-bold text-apple-text">Q</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2 w-full group">
+                            <div class="w-full bg-gray-200 rounded-t-lg h-32 relative overflow-hidden">
+                                <div class="absolute bottom-0 w-full bg-gray-300 h-[10%] transition-all duration-500 rounded-t-lg"></div>
+                            </div>
+                            <span class="text-xs font-medium text-gray-500">S</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card rounded-[32px] p-6 flex flex-col gap-4">
+                    <h3 class="font-semibold text-lg">Por Matéria</h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="font-medium">Programação C</span>
+                                <span class="text-gray-500">45%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                                <div class="bg-apple-purple h-full w-[45%] rounded-full"></div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="font-medium">Cálculo</span>
+                                <span class="text-gray-500">30%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                                <div class="bg-apple-orange h-full w-[30%] rounded-full"></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="font-medium">Projetos</span>
+                                <span class="text-gray-500">25%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                                <div class="bg-apple-green h-full w-[25%] rounded-full"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-auto p-4 bg-white/50 rounded-2xl border border-white/50">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xl">
+                                <i class="ph-fill ph-trend-up"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500">Média Geral</p>
+                                <p class="font-bold text-apple-text">+12% vs. mês passado</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-settings" class="view-section h-full flex-col gap-6 hidden animate-fade-in">
+            <header class="px-2">
+                <p class="text-apple-gray font-medium text-sm uppercase tracking-wider mb-1">Ajustes</p>
+                <h1 class="text-4xl font-bold tracking-tight">Configurações</h1>
+            </header>
+
+            <div class="max-w-3xl glass-card rounded-[32px] p-8 flex flex-col gap-8 overflow-y-auto no-scrollbar h-full">
+                
+                <div class="flex items-center gap-6 border-b border-gray-200/50 pb-6">
+                    <div class="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-md relative group cursor-pointer">
+                        <img src="https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff" class="w-full h-full">
+                        <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                            <i class="ph-bold ph-camera text-white text-xl"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold">Estudante Engenharia</h2>
+                        <p class="text-gray-500">user@university.edu</p>
+                        <button class="text-apple-blue text-sm font-medium mt-1 hover:underline">Editar Perfil</button>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Preferências</h3>
+                    <div class="bg-white/50 rounded-2xl divide-y divide-gray-200/50 border border-white/50">
+                        
+                        <div class="p-4 flex justify-between items-center">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center"><i class="ph-fill ph-moon"></i></div>
+                                <span class="font-medium">Dark Mode</span>
+                            </div>
+                            <div class="relative inline-block w-12 h-6 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" name="toggle" id="dark-mode" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 right-6 border-gray-300"/>
+                                <label for="dark-mode" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer transition-colors duration-300"></label>
+                            </div>
+                        </div>
+
+                        <div class="p-4 flex justify-between items-center">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-red-500 text-white flex items-center justify-center"><i class="ph-fill ph-bell"></i></div>
+                                <span class="font-medium">Notificações</span>
+                            </div>
+                            <div class="relative inline-block w-12 h-6 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" checked name="toggle" id="notif" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 right-6 border-gray-300"/>
+                                <label for="notif" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer transition-colors duration-300"></label>
+                            </div>
+                        </div>
+
+                         <div class="p-4 flex justify-between items-center cursor-pointer hover:bg-white/40 transition rounded-b-2xl">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-purple-500 text-white flex items-center justify-center"><i class="ph-fill ph-calendar"></i></div>
+                                <span class="font-medium">Sincronizar Google Calendar</span>
+                            </div>
+                            <i class="ph-bold ph-caret-right text-gray-400"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="p-4 rounded-2xl bg-white/50 text-red-500 font-medium hover:bg-red-50 transition shadow-sm border border-transparent hover:border-red-100 text-center">
+                    Sair da Conta
+                </button>
+
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        function switchTab(tabName) {
+            // 1. Esconder todas as Views
+            document.querySelectorAll('.view-section').forEach(el => {
+                el.classList.add('hidden');
+            });
+
+            // 2. Mostrar a View selecionada
+            const selectedView = document.getElementById(`view-${tabName}`);
+            if (selectedView) {
+                selectedView.classList.remove('hidden');
+                // Reiniciar animação CSS
+                selectedView.style.animation = 'none';
+                selectedView.offsetHeight; /* trigger reflow */
+                selectedView.style.animation = null; 
+            }
+
+            // 3. Atualizar estilo dos botões da Sidebar
+            const buttons = ['dashboard', 'calendar', 'stats', 'settings'];
+            
+            buttons.forEach(btn => {
+                const btnEl = document.getElementById(`nav-${btn}`);
+                if (btn === tabName) {
+                    // Estilo Ativo (Branco com sombra)
+                    btnEl.className = "nav-btn p-3 rounded-2xl bg-white shadow-sm text-apple-blue transition-all hover:scale-110 w-full flex justify-center";
+                } else {
+                    // Estilo Inativo (Cinza transparente)
+                    btnEl.className = "nav-btn p-3 rounded-2xl text-gray-400 hover:bg-white/50 hover:text-apple-text transition-all hover:scale-110 w-full flex justify-center";
+                }
+            });
+        }
+
+        // Toggle visual do Switch (CSS handle faz a maior parte, isso é só para garantir)
+        document.querySelectorAll('.toggle-checkbox').forEach(toggle => {
+            toggle.addEventListener('change', (e) => {
+                // Aqui você colocaria a lógica real (salvar no localStorage, etc)
+                console.log(`${e.target.id} is now ${e.target.checked}`);
+            });
+        });
+    </script>
 </body>
 </html>
