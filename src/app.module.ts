@@ -28,11 +28,11 @@ import { WebhookModule } from './webhook/webhook.module';
       connection: {
         host: process.env.REDIS_HOST,
         port: parseInt(process.env.REDIS_PORT, 10),
-        password: 'intelisensor'
+        password: process.env.REDIS_PASSWORD
       },
     }),
-    MessagingModule, // 🆕 API de mensagens principal
-    WebhookModule, // 🆕 Receber cliques de botões do WhatsApp
+    MessagingModule,
+    WebhookModule,
     InfobipModule,
     TwilioModule,
     GeoModule,
@@ -48,4 +48,4 @@ import { WebhookModule } from './webhook/webhook.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
