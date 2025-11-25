@@ -7,22 +7,21 @@ import * as bcrypt from 'bcrypt';
 import { noFoundUser } from 'src/errors/noFoundUser';
 import { Device, DeviceStatus } from '@src/types/device.type';
 import { DeviceStatusGateway } from './device-status.gateway';
-import { off } from 'process';
 
 @Injectable()
 export class DevicesService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly deviceStatusGateway: DeviceStatusGateway,
-  ) {}
+  ) { }
 
-  async pairDevice(data: PairDeviceDto) : Promise <Device> {
+  async pairDevice(data: PairDeviceDto): Promise<Device> {
     const existingDevicePaired = await this.prismaService.device.findUnique({
       where: { deviceIdentifier: data.serial },
     });
 
     const patientExists = await this.prismaService.user.findUnique({
-      where: { id: data.patientId }, 
+      where: { id: data.patientId },
     });
 
     if (!patientExists) {
@@ -39,14 +38,14 @@ export class DevicesService {
       where: { deviceIdentifier: data.serial },
       update: {
         apiKeyHash,
-        patientId: data.patientId,     
-        status: 'ACTIVE',           
+        patientId: data.patientId,
+        status: 'ACTIVE',
         registeredAt: new Date(),
       },
       create: {
         deviceIdentifier: data.serial,
         apiKeyHash,
-        patientId: data.patientId,     
+        patientId: data.patientId,
         status: 'ACTIVE',
         registeredAt: new Date(),
       },
@@ -55,7 +54,7 @@ export class DevicesService {
     return {
       id: device.id,
       deviceIdentifier: device.deviceIdentifier,
-      patientId: device.patientId, 
+      patientId: device.patientId,
       status: device.status as DeviceStatus,
       registeredAt: device.registeredAt,
     };
@@ -87,7 +86,7 @@ export class DevicesService {
 
     return this.prismaService.device.update({
       where: { id: deviceId },
-      data: { status: 'INACTIVE' }, 
+      data: { status: 'INACTIVE' },
     });
   }
 
@@ -95,7 +94,7 @@ export class DevicesService {
    * Processa heartbeat do ESP32
    * Atualiza status do dispositivo e emite via WebSocket
    */
-  
+
   async processHeartbeat(data: DeviceHeartbeatDto) {
     // Busca o device pelo serial
     const device = await this.prismaService.device.findUnique({
@@ -216,7 +215,7 @@ export class DevicesService {
     if (devicesGoingOffline.length > 0) {
       // Marca como offline
       const deviceIds = devicesGoingOffline.map(d => d.id);
-      
+
       await this.prismaService.device.updateMany({
         where: {
           id: { in: deviceIds },
@@ -285,5 +284,5 @@ export class DevicesService {
     }));
   }
 
-  
+
 }
