@@ -7,7 +7,7 @@ import { ContactExistError } from '@src/errors/contactExistError';
 @ApiTags('Contatos de Emergência')
 @Controller('emergency-contacts')
 export class EmergencyContactsController {
-  constructor(private readonly emergencyContactsService: EmergencyContactsService) {}
+  constructor(private readonly emergencyContactsService: EmergencyContactsService) { }
 
   @Post()
   @ApiOperation({

@@ -15,7 +15,7 @@ async function bootstrap() {
     .setTitle('Backend Unisal Integrador API')
     .setDescription(
       'API para sistema de monitoramento de quedas com integração WhatsApp. ' +
-        'Endpoints organizados por módulos: auth, patient, fall-alerts, emergency-contacts, devices, whatsapp, users, caregiver.',
+      'Endpoints organizados por módulos: auth, patient, fall-alerts, emergency-contacts, devices, whatsapp, users, caregiver.',
     )
     .setVersion('1.0.0')
     .setContact('criado por magros', 'https://example.com', 'magros@gab.com')
@@ -28,7 +28,7 @@ async function bootstrap() {
         bearerFormat: 'JWT',
         description: 'Insira o token JWT com "Bearer <token>"',
       },
-      'JWT', 
+      'JWT',
     )
     .addTag('auth', 'Autenticação e tokens')
     .addTag('patient', 'Operações do paciente')

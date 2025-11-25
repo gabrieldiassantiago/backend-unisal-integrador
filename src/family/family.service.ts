@@ -49,7 +49,7 @@ export class FamilyService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-  ) {}
+  ) { }
 
   async inviteFamilyMember(
     primaryCaregiverId: string,
@@ -90,7 +90,7 @@ export class FamilyService {
       throw new ForbiddenException('Apenas cuidadores podem convidar familiares');
     }
 
-      // 2. Verificar se já existe convite pendente ou relação ativa
+    // 2. Verificar se já existe convite pendente ou relação ativa
     const existingRelation = await this.prisma.familyRelation.findFirst({
       where: {
         primaryCaregiverId,
@@ -100,7 +100,7 @@ export class FamilyService {
         },
         revokedAt: null,
       },
-    });    if (existingRelation) {
+    }); if (existingRelation) {
       if (existingRelation.acceptedAt) {
         throw new ConflictException('Este familiar já tem acesso ao paciente');
       } else {
@@ -616,14 +616,14 @@ export class FamilyService {
       },
       primaryCaregiver: caregiverRelation
         ? {
-            id: caregiverRelation.caregiver.id,
-            name: caregiverRelation.caregiver.name,
-            email: caregiverRelation.caregiver.email,
-            role: caregiverRelation.caregiver.role,
-            createdAt: caregiverRelation.caregiver.createdAt,
-            relationId: caregiverRelation.id,
-            relationCreatedAt: caregiverRelation.createdAt,
-          }
+          id: caregiverRelation.caregiver.id,
+          name: caregiverRelation.caregiver.name,
+          email: caregiverRelation.caregiver.email,
+          role: caregiverRelation.caregiver.role,
+          createdAt: caregiverRelation.caregiver.createdAt,
+          relationId: caregiverRelation.id,
+          relationCreatedAt: caregiverRelation.createdAt,
+        }
         : null,
       familyMembers: familyRelations.map((relation) => ({
         id: relation.familyMember.id,
@@ -642,13 +642,13 @@ export class FamilyService {
         },
         permissions: relation.permissions
           ? {
-              canViewAlerts: relation.permissions.canViewAlerts,
-              canRespondAlerts: relation.permissions.canRespondAlerts,
-              canViewProfile: relation.permissions.canViewProfile,
-              canEditProfile: relation.permissions.canEditProfile,
-              canManageContacts: relation.permissions.canManageContacts,
-              canInviteFamily: relation.permissions.canInviteFamily,
-            }
+            canViewAlerts: relation.permissions.canViewAlerts,
+            canRespondAlerts: relation.permissions.canRespondAlerts,
+            canViewProfile: relation.permissions.canViewProfile,
+            canEditProfile: relation.permissions.canEditProfile,
+            canManageContacts: relation.permissions.canManageContacts,
+            canInviteFamily: relation.permissions.canInviteFamily,
+          }
           : null,
       })),
     };

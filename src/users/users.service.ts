@@ -12,19 +12,19 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
-  ) {}
+  ) { }
 
   /**
    * Pré-cadastro: Envia código mas NÃO cria usuário ainda
    * Usuário só será criado após verificar o email
    */
-  
+
   async createUser(dto: CreateUserDto) {
     const email = dto.email.toLowerCase().trim();
 
     // Verifica se já existe usuário com este email
     const existing = await this.prisma.user.findUnique({ where: { email } });
-    
+
     if (existing) {
       throw new ConflictException(`Usuário com o email ${email} já existe`);
     }
@@ -70,22 +70,22 @@ export class UsersService {
    * Gera um código de 6 dígitos e envia por email
    * também salva os dados temporários do usuário
    */
-  
+
   private async generateAndSendVerificationCode(
-    email: string, 
+    email: string,
     userName: string,
     tempUserData?: { name: string; hashedPassword: string; role: string }
   ): Promise<void> {
     // Gera código de 6 dígitos
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Define expiração (10 minutos)
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
     // Invalida códigos anteriores não verificados deste email
     await this.prisma.emailVerification.updateMany({
-      where: { 
+      where: {
         email,
         verified: false,
       },
@@ -95,7 +95,7 @@ export class UsersService {
     });
 
     // Cria novo código com dados temporários
-    await this.prisma.emailVerification.create({
+    const createdVerification = await this.prisma.emailVerification.create({
       data: {
         email,
         code,
@@ -105,7 +105,15 @@ export class UsersService {
     });
 
     // Envia email
-    await this.emailService.sendVerificationCode(email, code, userName);
+    try {
+      await this.emailService.sendVerificationCode(email, code, userName);
+    } catch (error) {
+      // Se falhar o envio, remove o registro para não bloquear o usuário
+      await this.prisma.emailVerification.delete({
+        where: { id: createdVerification.id },
+      });
+      throw error;
+    }
   }
 
   /**
@@ -133,7 +141,7 @@ export class UsersService {
     if (!verification) {
       // Incrementa tentativas em todos os códigos com este código
       await this.prisma.emailVerification.updateMany({
-        where: { 
+        where: {
           email,
           code: dto.code,
         },
@@ -147,58 +155,60 @@ export class UsersService {
       throw new BadRequestException('Código inválido ou expirado');
     }
 
-    // Marca código como verificado
-    await this.prisma.emailVerification.update({
-      where: { id: verification.id },
-      data: {
-        verified: true,
-        verifiedAt: new Date(),
-      },
-    });
-
-    //  criar usuario já que foi verificado
-    if (verification.tempUserData) {
-      const userData = verification.tempUserData as any;
-      
-      const user = await this.prisma.user.create({
+    return this.prisma.$transaction(async (tx) => {
+      // Marca código como verificado
+      await tx.emailVerification.update({
+        where: { id: verification.id },
         data: {
-          name: userData.name,
-          email,
-          password: userData.hashedPassword,
-          role: userData.role,
-          hasAccount: true,
-          emailVerified: true,
+          verified: true,
+          verifiedAt: new Date(),
         },
-        select: { 
-          id: true, 
-          name: true, 
-          email: true, 
-          role: true, 
-          hasAccount: true, 
-          emailVerified: true, 
-          createdAt: true 
+      });
+
+      // criar usuario já que foi verificado
+      if (verification.tempUserData) {
+        const userData = verification.tempUserData as any;
+
+        const user = await tx.user.create({
+          data: {
+            name: userData.name,
+            email,
+            password: userData.hashedPassword,
+            role: userData.role,
+            hasAccount: true,
+            emailVerified: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            hasAccount: true,
+            emailVerified: true,
+            createdAt: true
+          },
+        });
+
+        return {
+          message: 'Email verificado com sucesso! Sua conta foi criada. Agora você pode fazer login.',
+          verified: true,
+          user,
+        };
+      }
+
+      // Se não tem dados temporários, é uma verificação de email existente
+      await tx.user.update({
+        where: { email },
+        data: {
+          emailVerified: true,
         },
       });
 
       return {
-        message: 'Email verificado com sucesso! Sua conta foi criada. Agora você pode fazer login.',
+        message: 'Email verificado com sucesso! Agora você pode fazer login.',
         verified: true,
-        user,
       };
-    }
-
-    // Se não tem dados temporários, é uma verificação de email existente
-    await this.prisma.user.update({
-      where: { email },
-      data: {
-        emailVerified: true,
-      },
     });
-
-    return {
-      message: 'Email verificado com sucesso! Agora você pode fazer login.',
-      verified: true,
-    };
   }
 
   /**
@@ -217,10 +227,10 @@ export class UsersService {
       if (user.emailVerified) {
         throw new BadRequestException('Email já verificado. Você pode fazer login.');
       }
-      
+
       // Se usuário existe mas não verificado, reenvia código
       await this.generateAndSendVerificationCode(normalizedEmail, user.name);
-      
+
       return {
         message: 'Novo código enviado para seu email',
       };
@@ -256,10 +266,10 @@ export class UsersService {
 
     // Extrai dados temporários para reenvio
     const tempData = pendingVerification.tempUserData as any;
-    
+
     // Gera e envia novo código
     await this.generateAndSendVerificationCode(
-      normalizedEmail, 
+      normalizedEmail,
       tempData?.name || 'Usuário',
       tempData
     );
@@ -367,7 +377,7 @@ export class UsersService {
     // Verifica se está tentando alterar o email para um que já existe
     if (dto.email && dto.email !== existingUser.email) {
       const normalizedEmail = dto.email.toLowerCase().trim();
-      
+
       const emailInUse = await this.prisma.user.findUnique({
         where: { email: normalizedEmail },
       });
@@ -429,7 +439,7 @@ export class UsersService {
     }
 
     return {
-      message: dto.email && dto.email !== existingUser.email 
+      message: dto.email && dto.email !== existingUser.email
         ? 'Usuário atualizado com sucesso! Um código de verificação foi enviado para o novo email.'
         : 'Usuário atualizado com sucesso!',
       user: updatedUser,

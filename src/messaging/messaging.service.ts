@@ -9,7 +9,6 @@ export class MessagingService {
   private readonly baseUrl = 'http://104.248.184.126:8080';
 
   constructor() {
-    // Criar cliente HTTP com configurações
     this.httpClient = axios.create({
       baseURL: this.baseUrl,
       headers: {
@@ -25,10 +24,8 @@ export class MessagingService {
   /**
    * Enviar mensagem de texto via API
    */
-  
   async sendText(to: string, text: string): Promise<any> {
     try {
-      // Limpar número (remover caracteres especiais)
       const cleanNumber = to.replace(/\D/g, '');
 
       this.logger.log(`📤 Enviando mensagem para ${cleanNumber}`);
@@ -43,7 +40,7 @@ export class MessagingService {
 
       this.logger.log(`✅ Mensagem enviada com sucesso!`);
       this.logger.log(`📊 Response: ${JSON.stringify(response.data)}`);
-      
+
       return response.data;
     } catch (error: any) {
       this.logger.error(`❌ Erro ao enviar mensagem: ${error.response?.data || error.message}`);
@@ -55,9 +52,7 @@ export class MessagingService {
 
   /**
    * Enviar mensagem com botões interativos via Evolution API
-   * Usando formato de BUTTONS da documentação oficial
    */
-
   async sendButtons(params: {
     to: string;
     title: string;
@@ -80,8 +75,8 @@ export class MessagingService {
         description: params.description,
         footer: params.footer,
         buttons: params.buttons.map(btn => ({
-          type: 'reply',
           displayText: btn.title,
+          text: btn.title,
           id: btn.id,
         })),
       };
@@ -92,15 +87,50 @@ export class MessagingService {
 
       this.logger.log(`✅ Botões enviados com sucesso!`);
       this.logger.log(`📊 Response: ${JSON.stringify(response.data)}`);
-      
+
       return response.data;
     } catch (error: any) {
       this.logger.error(`❌ Erro ao enviar botões: ${JSON.stringify(error.response?.data)}`);
       this.logger.error(`Status Code: ${error.response?.status}`);
       this.logger.error(`Error Message: ${error.message}`);
-      
+
       this.logger.warn('⚠️ Enviando como texto simples (fallback)...');
       return await this.sendTextWithOptions(params);
+    }
+  }
+
+  /**
+   * Enviar enquete (Poll) via Evolution API
+   */
+  async sendPoll(params: {
+    to: string;
+    title: string;
+    options: string[];
+    selectableCount?: number;
+  }): Promise<any> {
+    try {
+      const cleanNumber = params.to.replace(/\D/g, '');
+
+      this.logger.log(`📊 Enviando enquete para ${cleanNumber}`);
+      this.logger.log(`❓ Pergunta: ${params.title}`);
+
+      const payload = {
+        number: cleanNumber,
+        name: params.title,
+        selectableCount: params.selectableCount || 1,
+        values: params.options,
+      };
+
+      const response = await this.httpClient.post('/message/sendPoll/intelisensor', payload);
+
+      this.logger.log(`✅ Enquete enviada com sucesso!`);
+      this.logger.log(`📊 Response: ${JSON.stringify(response.data)}`);
+
+      return response.data;
+    } catch (error: any) {
+      this.logger.error(`❌ Erro ao enviar enquete: ${JSON.stringify(error.response?.data)}`);
+      this.logger.error(`Status Code: ${error.response?.status}`);
+      throw error;
     }
   }
 
@@ -130,6 +160,8 @@ ${params.footer}`;
     return await this.sendText(params.to, message);
   }
 
+  // --- MÉTODOS DE NEGÓCIO ---
+
   /**
    * Enviar alerta de queda COM BOTÕES INTERATIVOS
    */
@@ -142,8 +174,8 @@ ${params.footer}`;
     priority: number;
   }): Promise<any> {
     const priorityEmoji = params.priority === 1 ? '⭐' : '📱';
-    const priorityText = params.priority === 1 
-      ? 'Você é o contato prioritário!' 
+    const priorityText = params.priority === 1
+      ? 'Você é o contato prioritário!'
       : `Contato de prioridade ${params.priority}`;
 
     return await this.sendButtons({
@@ -178,7 +210,7 @@ ${priorityEmoji} ${priorityText}
   }
 
   /**
-   * Enviar lembrete de verificação COM OPÇÕES NUMÉRICAS
+   * ✅ CORRIGIDO: Enviar lembrete de verificação COM BOTÕES
    */
   async sendVerificationReminderWithButtons(params: {
     to: string;
@@ -187,7 +219,88 @@ ${priorityEmoji} ${priorityText}
     location: string;
     contactName: string;
   }): Promise<any> {
-    const message = `⏰ *LEMBRETE: Você está verificando?*
+    this.logger.log(`⏰ Enviando lembrete de verificação para ${params.contactName}`);
+
+    // ✅ Usar sendButtons com mensagem específica de lembrete
+    return await this.sendButtons({
+      to: params.to,
+      title: '⏰ LEMBRETE: Você está verificando?',
+      description: `${params.contactName}, você indicou que estava verificando.
+
+Paciente: *${params.patientName}*
+
+📍 Localização:
+${params.location}
+
+Por favor, confirme o status atual:`,
+      footer: '🤖 Sistema InteliSensor - Aguardando sua resposta',
+      buttons: [
+        {
+          id: `confirm_emergency_after_verify_${params.alertId}`,
+          title: '🚨 É Emergência!',
+        },
+        {
+          id: `all_good_${params.alertId}`,
+          title: '✅ Está Tudo Bem',
+        },
+      ],
+    });
+  }
+
+  /**
+   * Enviar alerta de queda COM ENQUETE (Poll)
+   */
+  async sendFallAlertWithPoll(params: {
+    to: string;
+    alertId: string;
+    patientName: string;
+    location: string;
+    contactName: string;
+    priority: number;
+  }): Promise<any> {
+    const priorityEmoji = params.priority === 1 ? '⭐' : '📱';
+    const priorityText = params.priority === 1
+      ? 'Você é o contato prioritário!'
+      : `Contato de prioridade ${params.priority}`;
+
+    await this.sendText(params.to, `🚨 *ALERTA DE QUEDA DETECTADA*
+
+Olá, ${params.contactName}!
+
+Detectamos uma possível queda de *${params.patientName}*.
+
+📍 Localização:
+${params.location}
+
+${priorityEmoji} ${priorityText}
+
+⏱️ Por favor, responda o mais rápido possível!`);
+
+    return await this.sendPoll({
+      to: params.to,
+      title: "Qual é a situação?",
+      options: [
+        `✅ Confirmar Emergência (${params.alertId})`,
+        `🔍 Estou Verificando (${params.alertId})`,
+        `❌ Falso Alarme (${params.alertId})`
+      ],
+      selectableCount: 1
+    });
+  }
+
+  /**
+   * ✅ CORRIGIDO: Enviar lembrete de verificação COM ENQUETE
+   */
+  async sendVerificationReminderWithPoll(params: {
+    to: string;
+    alertId: string;
+    patientName: string;
+    location: string;
+    contactName: string;
+  }): Promise<any> {
+    this.logger.log(`⏰ Enviando lembrete (Poll) de verificação para ${params.contactName}`);
+
+    await this.sendText(params.to, `⏰ *LEMBRETE: Você está verificando?*
 
 ${params.contactName}, você indicou que estava verificando.
 
@@ -196,23 +309,25 @@ Paciente: *${params.patientName}*
 📍 Localização:
 ${params.location}
 
-Por favor, confirme o status atual:
+Por favor, confirme o status atual:`);
 
-📋 *Responda com o número da opção:*
-1. 🚨 É Emergência!
-2. ✅ Está Tudo Bem
-
-🤖 Sistema InteliSensor`;
-
-    return await this.sendText(params.to, message);
+    return await this.sendPoll({
+      to: params.to,
+      title: "Qual é o status da verificação?",
+      options: [
+        `🚨 É Emergência! (${params.alertId})`,
+        `✅ Está Tudo Bem (${params.alertId})`
+      ],
+      selectableCount: 1
+    });
   }
 
   /**
-   * Enviar alerta de queda
+   * Enviar alerta de queda (Texto Simples)
    */
   async sendFallAlert(to: string, patientName: string, location: string, contactName: string, priority: number): Promise<any> {
-    const priorityText = priority === 1 
-      ? '\n\n⭐ Você é o contato prioritário!' 
+    const priorityText = priority === 1
+      ? '\n\n⭐ Você é o contato prioritário!'
       : `\n\n(Contato de prioridade ${priority})`;
 
     const message = `🚨 *ALERTA DE QUEDA*
@@ -236,8 +351,8 @@ Contamos com você! 🙏${priorityText}`;
    * Enviar confirmação de emergência
    */
   async sendEmergencyConfirmed(to: string, patientName: string, location: string, contactName: string, priority: number): Promise<any> {
-    const priorityText = priority === 1 
-      ? '\n\n⭐ Você é o contato prioritário!' 
+    const priorityText = priority === 1
+      ? '\n\n⭐ Você é o contato prioritário!'
       : `\n\n(Contato de prioridade ${priority})`;
 
     const message = `🚨 *EMERGÊNCIA - Queda Confirmada*
@@ -277,7 +392,7 @@ Você pode ficar tranquilo(a). 💚`;
   }
 
   /**
-   * Enviar lembrete de verificação
+   * Enviar lembrete de verificação (Texto Simples)
    */
   async sendVerificationReminder(to: string, patientName: string, location: string, contactName: string): Promise<any> {
     const message = `⏰ *LEMBRETE DE VERIFICAÇÃO*
@@ -299,8 +414,8 @@ Aguardamos seu retorno! 🙏`;
    * Enviar alerta resolvido
    */
   async sendAlertResolved(to: string, patientName: string, responderName: string, resolvedByCall: boolean): Promise<any> {
-    const resolveMethod = resolvedByCall 
-      ? 'atendeu à chamada' 
+    const resolveMethod = resolvedByCall
+      ? 'atendeu à chamada'
       : 'confirmou através do aplicativo';
 
     const message = `✅ *ALERTA RESOLVIDO*

@@ -5,59 +5,59 @@ import { ContactExistError } from '@src/errors/contactExistError';
 
 @Injectable()
 export class EmergencyContactsService {
-    
-    constructor(private readonly prismaService: PrismaService) {}
 
-    async createContact(data: CreateEmergencyContactDto) {
-  const patientExists = await this.prismaService.user.findUnique({
-    where: { id: data.patientId }
-  });
+  constructor(private readonly prismaService: PrismaService) { }
 
-  if (!patientExists || patientExists.role !== 'PATIENT') {
-    throw new Error(`Paciente com ID ${data.patientId} não encontrado ou não é paciente.`);
-  }
+  async createContact(data: CreateEmergencyContactDto) {
+    const patientExists = await this.prismaService.user.findUnique({
+      where: { id: data.patientId }
+    });
 
-  // verifica duplicidade pelo telefone
-  const contactExists = await this.prismaService.emergencyContact.findFirst({
-    where: {
-      patientId: data.patientId,
-      phone: data.phone
+    if (!patientExists || patientExists.role !== 'PATIENT') {
+      throw new Error(`Paciente com ID ${data.patientId} não encontrado ou não é paciente.`);
     }
-  });
 
-  if (contactExists) {
-    throw new Error('Contato já existe');
-  }
+    // verifica duplicidade pelo telefone
+    const contactExists = await this.prismaService.emergencyContact.findFirst({
+      where: {
+        patientId: data.patientId,
+        phone: data.phone
+      }
+    });
 
-
-  // define prioridade (ex: próximo número baseado em quantos já existem)
-  const count = await this.prismaService.emergencyContact.count({
-    where: { patientId: data.patientId }
-  });
-
-  return this.prismaService.emergencyContact.create({
-    data: {
-      ...data,
-      priority: count + 1
+    if (contactExists) {
+      throw new Error('Contato já existe');
     }
-  });
-}
+
+
+    // define prioridade (ex: próximo número baseado em quantos já existem)
+    const count = await this.prismaService.emergencyContact.count({
+      where: { patientId: data.patientId }
+    });
+
+    return this.prismaService.emergencyContact.create({
+      data: {
+        ...data,
+        priority: count + 1
+      }
+    });
+  }
 
   async getContactsByPatient(patientId: string) {
     return this.prismaService.emergencyContact.findMany({
-      where: {patientId}
+      where: { patientId }
     })
   }
 
   async deleteContact(contactId: string) {
     return this.prismaService.emergencyContact.delete({
-      where: {id: contactId}
+      where: { id: contactId }
     })
   }
 
   async updateContact(contactId: string, data: Partial<CreateEmergencyContactDto>) {
     return this.prismaService.emergencyContact.update({
-      where: {id: contactId},
+      where: { id: contactId },
       data
     })
   }

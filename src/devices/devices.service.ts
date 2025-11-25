@@ -13,15 +13,15 @@ export class DevicesService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly deviceStatusGateway: DeviceStatusGateway,
-  ) {}
+  ) { }
 
-  async pairDevice(data: PairDeviceDto) : Promise <Device> {
+  async pairDevice(data: PairDeviceDto): Promise<Device> {
     const existingDevicePaired = await this.prismaService.device.findUnique({
       where: { deviceIdentifier: data.serial },
     });
 
     const patientExists = await this.prismaService.user.findUnique({
-      where: { id: data.patientId }, 
+      where: { id: data.patientId },
     });
 
     if (!patientExists) {
@@ -38,14 +38,14 @@ export class DevicesService {
       where: { deviceIdentifier: data.serial },
       update: {
         apiKeyHash,
-        patientId: data.patientId,     
-        status: 'ACTIVE',           
+        patientId: data.patientId,
+        status: 'ACTIVE',
         registeredAt: new Date(),
       },
       create: {
         deviceIdentifier: data.serial,
         apiKeyHash,
-        patientId: data.patientId,     
+        patientId: data.patientId,
         status: 'ACTIVE',
         registeredAt: new Date(),
       },
@@ -54,7 +54,7 @@ export class DevicesService {
     return {
       id: device.id,
       deviceIdentifier: device.deviceIdentifier,
-      patientId: device.patientId, 
+      patientId: device.patientId,
       status: device.status as DeviceStatus,
       registeredAt: device.registeredAt,
     };
@@ -86,7 +86,7 @@ export class DevicesService {
 
     return this.prismaService.device.update({
       where: { id: deviceId },
-      data: { status: 'INACTIVE' }, 
+      data: { status: 'INACTIVE' },
     });
   }
 
@@ -94,7 +94,7 @@ export class DevicesService {
    * Processa heartbeat do ESP32
    * Atualiza status do dispositivo e emite via WebSocket
    */
-  
+
   async processHeartbeat(data: DeviceHeartbeatDto) {
     // Busca o device pelo serial
     const device = await this.prismaService.device.findUnique({
@@ -184,7 +184,6 @@ export class DevicesService {
    * Marca dispositivos como offline se não enviaram heartbeat
    * a mais de X minutos (executado periodicamente)
    */
-
   async checkOfflineDevices() {
     const OFFLINE_THRESHOLD_MINUTES = 5;
     const thresholdDate = new Date();
@@ -199,28 +198,49 @@ export class DevicesService {
           { lastHeartbeatAt: null },
         ],
       },
-      include: { patient: true },
+      select: {
+        id: true,
+        deviceIdentifier: true,
+        patientId: true,
+        lastHeartbeatAt: true,
+        patient: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
 
-    // Marca como offline e emite eventos
-    for (const device of devicesGoingOffline) {
-      await this.prismaService.device.update({
-        where: { id: device.id },
-        data: { isOnline: false },
+    if (devicesGoingOffline.length > 0) {
+      // Marca como offline
+      const deviceIds = devicesGoingOffline.map(d => d.id);
+
+      await this.prismaService.device.updateMany({
+        where: {
+          id: { in: deviceIds },
+        },
+        data: {
+          isOnline: false,
+        },
       });
 
-      if (device.patientId) {
-        await this.deviceStatusGateway.emitDeviceOffline({
-          deviceId: device.id,
-          deviceIdentifier: device.deviceIdentifier,
-          patientId: device.patientId,
-        });
+      // Emite eventos WebSocket para cada dispositivo
+      for (const device of devicesGoingOffline) {
+        if (device.patientId) {
+          await this.deviceStatusGateway.emitDeviceOffline({
+            deviceId: device.id,
+            deviceIdentifier: device.deviceIdentifier,
+            patientId: device.patientId,
+          });
+        }
       }
     }
 
     return {
       checked: new Date(),
       devicesMarkedOffline: devicesGoingOffline.length,
+      offlineDeviceIds: devicesGoingOffline.map(d => d.id), // IDs para notificação
     };
   }
 
@@ -263,4 +283,6 @@ export class DevicesService {
       ipAddress: device.ipAddress ?? undefined,
     }));
   }
+
+
 }

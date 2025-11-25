@@ -9,11 +9,12 @@ export class WebhookController {
   constructor(
     private readonly fallAlertsService: FallAlertsService,
     private readonly prismaService: PrismaService,
-  ) {}
+  ) { }
 
   /**
    * Webhook para receber eventos da Evolution API
    */
+
   @Post('evolution')
   async handleEvolutionWebhook(@Body() payload: any, @Headers() headers: any) {
     this.logger.log('📥 ================================');
@@ -37,11 +38,11 @@ export class WebhookController {
         return await this.handleMessageUpdate(data);
       }
 
-      this.logger.log(`ℹ️ Evento ignorado: ${event}`);
+      this.logger.log(`Evento ignorado: ${event}`);
       return { status: 'ignored', event };
 
     } catch (error: any) {
-      this.logger.error('❌ Erro ao processar webhook:', error.message);
+      this.logger.error(' Erro ao processar webhook:', error.message);
       this.logger.error(error.stack);
       return { status: 'error', message: error.message };
     }
@@ -50,7 +51,7 @@ export class WebhookController {
   /**
    * Processar mensagem recebida (MESSAGES_UPSERT)
    */
-  
+
   private async handleMessageReceived(data: any) {
     try {
       this.logger.log('📨 handleMessageReceived chamado');
@@ -58,7 +59,7 @@ export class WebhookController {
 
       // O data pode vir como objeto único ou array
       const messages = Array.isArray(data) ? data : [data];
-      
+
       for (const messageData of messages) {
         const message = messageData?.message;
         const key = messageData?.key;
@@ -95,10 +96,10 @@ export class WebhookController {
 
         // 3. Verificar se é mensagem de texto simples (resposta numérica)
         const textMessage = message?.conversation || message?.extendedTextMessage?.text;
-        
+
         if (textMessage) {
           this.logger.log(`💬 Mensagem de texto: "${textMessage}"`);
-          
+
           // Verificar se é número (1, 2, 3)
           if (/^[123]$/.test(textMessage.trim())) {
             this.logger.log(`🔢 Resposta numérica detectada: ${textMessage}`);
@@ -124,9 +125,9 @@ export class WebhookController {
   private async handleMessageUpdate(data: any) {
     try {
       this.logger.log('🔄 Atualização de mensagem recebida');
-      
+
       const message = data?.message;
-      
+
       if (message?.pollUpdateMessage) {
         this.logger.log('🗳️ Atualização de POLL detectada!');
         return await this.handlePollVote(data);
@@ -147,7 +148,7 @@ export class WebhookController {
     try {
       const buttonResponse = data?.message?.buttonsResponseMessage;
       const key = data?.key;
-      
+
       const phoneNumber = key?.remoteJid?.replace('@s.whatsapp.net', '');
       const selectedButtonId = buttonResponse?.selectedButtonId;
       const displayText = buttonResponse?.selectedDisplayText;
@@ -168,7 +169,7 @@ export class WebhookController {
       // O ID do botão tem formato: action_alertId
       // Ex: confirm_emergency_123, verify_456, false_alarm_789
       const parts = selectedButtonId.split('_');
-      
+
       // Se tiver alertId no final, extrair
       let action = selectedButtonId;
       if (parts.length > 1) {
@@ -193,7 +194,7 @@ export class WebhookController {
     try {
       const pollUpdate = data?.message?.pollUpdateMessage;
       const key = data?.key;
-      
+
       const phoneNumber = key?.remoteJid?.replace('@s.whatsapp.net', '');
       const votes = pollUpdate?.vote || [];
 
@@ -211,7 +212,7 @@ export class WebhookController {
 
       // O voto vem como array de índices (0, 1, 2)
       const selectedIndex = votes[0];
-      
+
       // Mapear índice para ação
       const actionMap = {
         0: 'confirm_emergency',  // Opção 1: Confirmar Emergência
@@ -352,7 +353,7 @@ export class WebhookController {
 
       this.logger.log(`👤 Contato encontrado: ${contact.name} (ID: ${contact.id})`);
       this.logger.log(`👨‍⚕️ Paciente: ${contact.patient.name}`);
-      
+
       // Buscar cuidador principal deste paciente
       const caregiverRelation = await this.prismaService.caregiverPatient.findFirst({
         where: {
@@ -362,12 +363,12 @@ export class WebhookController {
           caregiver: true,
         },
       });
-      
+
       if (!caregiverRelation) {
         this.logger.warn(`⚠️ Nenhum cuidador associado ao paciente ${contact.patient.name}`);
         return { status: 'error', reason: 'no_caregiver_found', patientId: contact.patientId };
       }
-      
+
       const caregiverId = caregiverRelation.caregiverId;
       this.logger.log(`👤 Caregiver ID: ${caregiverId} (${caregiverRelation.caregiver.name})`);
 
@@ -396,7 +397,7 @@ export class WebhookController {
       switch (action) {
         case 'confirm_emergency':
           this.logger.log(`🚨 Confirmando emergência para alerta ${alert.id}...`);
-          
+
           // Se o alerta está em VERIFYING, usar confirmAfterVerification
           if (alert.status === 'VERIFYING') {
             this.logger.log(`🔍 Alerta está em VERIFYING - usando confirmAfterVerification`);
@@ -404,7 +405,7 @@ export class WebhookController {
           } else {
             await this.fallAlertsService.confirmAlert(alert.id);
           }
-          
+
           result = { action: 'emergency_confirmed', alertId: alert.id };
           this.logger.log(`✅ Emergência confirmada!`);
           break;
@@ -455,7 +456,7 @@ export class WebhookController {
     this.logger.log(`🧪 Phone: ${body.phoneNumber}`);
     this.logger.log(`🧪 Action: ${body.action}`);
     this.logger.log(`🧪 ================================`);
-    
+
     return await this.processAction(body.phoneNumber, body.action);
   }
 }

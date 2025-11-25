@@ -1,5 +1,5 @@
 // email.service.ts
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Mailgun from 'mailgun.js';
 import * as FormData from 'form-data';
@@ -16,7 +16,7 @@ export class EmailService implements OnModuleInit {
     this.fromEmail = this.configService.get<string>('MAILGUN_FROM_EMAIL') || 'noreply@sandbox123.mailgun.org';
     this.fromName = this.configService.get<string>('FROM_NAME') || 'InteliSensor';
     this.domain = this.configService.get<string>('MAILGUN_DOMAIN') || 'sandbox123.mailgun.org';
-    
+
     const mailgun = new Mailgun(FormData as any);
     this.mg = mailgun.client({
       username: 'api',
@@ -25,13 +25,16 @@ export class EmailService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    if (!this.configService.get<string>('MAILGUN_API_KEY')) {
+      this.logger.warn('⚠️  MAILGUN_API_KEY não configurada. O envio de emails pode falhar.');
+    }
     this.logger.log('✅ Mailgun Email Service inicializado');
   }
 
   async sendVerificationCode(email: string, code: string, userName: string): Promise<void> {
     try {
       const emailContent = this.generateVerificationEmailHtml(code, userName);
-      
+
       this.logger.log(`📧 Enviando código de verificação para ${email}: ${code}`);
 
       const result = await this.mg.messages.create(this.domain, {
@@ -44,8 +47,10 @@ export class EmailService implements OnModuleInit {
 
       this.logger.log(`✅ Email enviado com sucesso! ID: ${result.id}`);
     } catch (error) {
-      this.logger.error(`❌ Erro ao enviar email: ${error.message}`);
+      this.logger.error(`❌ Erro ao enviar email: ${error.message}`, error.stack);
       this.logger.warn(`⚠️  FALLBACK - Código de verificação para ${email}: ${code}`);
+
+      throw new InternalServerErrorException(`Falha ao entregar email de verificação: ${error.message}`);
     }
   }
 
