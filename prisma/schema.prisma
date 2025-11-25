@@ -30,6 +30,8 @@ model User {
   createdAt       DateTime @default(now())
   gender          Gender?
   currentSessionId String?
+  phone     String?  
+
 
   // relações
   devices       Device[]
