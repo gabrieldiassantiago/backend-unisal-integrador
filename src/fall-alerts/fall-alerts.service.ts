@@ -234,21 +234,23 @@ export class FallAlertsService {
       statusAlert: alert.status,
     };
 
+    // ✅ EMITIR WEBSOCKET IMEDIATAMENTE (SÍNCRONO)
+    console.log('🚀 Emitindo WebSocket newAlert IMEDIATAMENTE...');
+    this.gateway.emitNewAlert(payload);
+    console.log('✅ WebSocket newAlert emitido!');
+
+    // ✅ PUSH NOTIFICATIONS IMEDIATO (não espera)
+    this.sendPushNotificationsToRelatedUsers(
+      device.patientId,
+      device.patient.name,
+      alert.id,
+      alert.latitude,
+      alert.longitude
+    ).catch(err => console.error('Erro ao enviar push:', err));
+
+    // ✅ Jobs em background (sem delay inicial para jobs críticos)
     Promise.all([
-      this.sendPushNotificationsToRelatedUsers(
-        device.patientId,
-        device.patient.name,
-        alert.id,
-        alert.latitude,
-        alert.longitude
-      ),
-
-      this.alertsQueue.add(
-        'emitWebSocket',
-        { event: 'newAlert', payload },
-        { priority: 10, delay: 0 }
-      ),
-
+      // Job de WhatsApp + Chamada - SEM DELAY
       this.alertsQueue.add(
         'processInitialAlert',
         {
@@ -257,9 +259,10 @@ export class FallAlertsService {
           latitude: data.latitude,
           longitude: data.longitude
         },
-        { priority: 10, delay: 100 }
+        { priority: 10 } // Removido delay
       ),
 
+      // Notificar contatos secundários após 3 minutos
       this.alertsQueue.add(
         'notifySecondaryContacts',
         {
@@ -271,6 +274,7 @@ export class FallAlertsService {
         { delay: 180000 }
       ),
 
+      // Auto-confirmar após 5 minutos
       this.alertsQueue.add(
         'autoConfirm',
         { alertId: alert.id },
@@ -278,7 +282,7 @@ export class FallAlertsService {
       )
     ]).catch(err => console.error('Erro ao agendar jobs:', err));
 
-    console.log(`Alerta ${alert.id} criado! Jobs em background.`);
+    console.log(`✅ Alerta ${alert.id} criado! WebSocket emitido + Jobs agendados.`);
 
     return payload;
   }
