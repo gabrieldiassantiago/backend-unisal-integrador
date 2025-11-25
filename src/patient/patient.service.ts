@@ -24,7 +24,7 @@ function calcAge(birthDate?: Date | null): number | null {
 
 @Injectable()
 export class PatientService {
-  constructor(private prisma: PrismaService, private jwt: JwtService) {}
+  constructor(private prisma: PrismaService, private jwt: JwtService) { }
 
   async loginByCode(codeRaw: string) {
     const code = normalizeCode(codeRaw);
@@ -108,7 +108,8 @@ export class PatientService {
         name: accessCode.patient.name,
         birthDate: accessCode.patient.birthDate,
         gender: accessCode.patient.gender,
-        age: calcAge(accessCode.patient.birthDate)      },
+        age: calcAge(accessCode.patient.birthDate)
+      },
     };
   }
 
@@ -138,5 +139,5 @@ export class PatientService {
       age: calcAge(patient.birthDate),
     };
   }
-  
+
 }
