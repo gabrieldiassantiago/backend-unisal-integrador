@@ -5,8 +5,8 @@ import axios, { AxiosInstance } from 'axios';
 export class MessagingService {
   private readonly logger = new Logger(MessagingService.name);
   private httpClient: AxiosInstance;
-  private readonly apiKey = 'B0F1888ADAE4-4C72-B849-B12709F80913';
-  private readonly baseUrl = 'http://104.248.184.126:8080';
+  private readonly apiKey = process.env.API_KEY_MESSAGE;
+  private readonly baseUrl = process.env.BASE_URL_MESSAGE;
 
   constructor() {
     this.httpClient = axios.create({
@@ -210,7 +210,7 @@ ${priorityEmoji} ${priorityText}
   }
 
   /**
-   * ✅ CORRIGIDO: Enviar lembrete de verificação COM BOTÕES
+   *  Enviar lembrete de verificação COM BOTÕES
    */
   async sendVerificationReminderWithButtons(params: {
     to: string;
@@ -289,7 +289,7 @@ ${priorityEmoji} ${priorityText}
   }
 
   /**
-   * ✅ CORRIGIDO: Enviar lembrete de verificação COM ENQUETE
+   *  Enviar lembrete de verificação COM ENQUETE
    */
   async sendVerificationReminderWithPoll(params: {
     to: string;
@@ -302,12 +302,12 @@ ${priorityEmoji} ${priorityText}
 
     await this.sendText(params.to, `⏰ *LEMBRETE: Você está verificando?*
 
-${params.contactName}, você indicou que estava verificando.
+      ${params.contactName}, você indicou que estava verificando.
 
-Paciente: *${params.patientName}*
+      Paciente: *${params.patientName}*
 
-📍 Localização:
-${params.location}
+      📍 Localização:
+      ${params.location}
 
 Por favor, confirme o status atual:`);
 
