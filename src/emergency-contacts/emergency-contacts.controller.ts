@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiConflictResponse } from
 import { EmergencyContactsService } from './emergency-contacts.service';
 import { CreateEmergencyContactDto } from './dtos/CreateEmergencyContactDto';
 import { ContactExistError } from '@src/errors/contactExistError';
+import { UpdateEmergencyContactDto } from './dtos/UpdateEmergencyContactDto';
 
 @ApiTags('Contatos de Emergência')
 @Controller('emergency-contacts')
@@ -59,7 +60,7 @@ export class EmergencyContactsController {
   @ApiOperation({ summary: 'Atualizar contato' })
   async update(
     @Param('id') id: string,
-    @Body() data: Partial<CreateEmergencyContactDto> & { priority?: number }
+    @Body() data: Partial<UpdateEmergencyContactDto> & { priority?: number }
   ) {
     return this.emergencyContactsService.updateContact(id, data);
   }

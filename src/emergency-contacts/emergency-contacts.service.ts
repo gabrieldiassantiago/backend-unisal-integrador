@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateEmergencyContactDto } from './dtos/CreateEmergencyContactDto';
 import { ContactExistError } from '@src/errors/contactExistError';
+import { UpdateEmergencyContactDto } from './dtos/UpdateEmergencyContactDto';
 
 @Injectable()
 export class EmergencyContactsService {
@@ -55,7 +56,10 @@ export class EmergencyContactsService {
     })
   }
 
-  async updateContact(contactId: string, data: Partial<CreateEmergencyContactDto>) {
+  async updateContact(contactId: string, data: Partial<UpdateEmergencyContactDto>) {
+
+    //se tiver autorização
+
     return this.prismaService.emergencyContact.update({
       where: { id: contactId },
       data
