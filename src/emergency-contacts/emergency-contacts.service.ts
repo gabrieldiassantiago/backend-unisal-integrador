@@ -51,8 +51,33 @@ export class EmergencyContactsService {
   }
 
   async deleteContact(contactId: string) {
-    return this.prismaService.emergencyContact.delete({
-      where: { id: contactId }
+    return this.prismaService.$transaction(async (tx) => {
+      const contactToDelete = await tx.emergencyContact.findUnique({
+        where: { id: contactId }
+      })
+
+      if (!contactToDelete) {
+        throw new Error('Contato não encontrado');
+      }
+      const deleted = await tx.emergencyContact.delete({
+        where: { id: contactId }
+      })
+
+      await tx.emergencyContact.updateMany({
+        where: {
+          patientId: contactToDelete.patientId,
+          priority: {
+            gt: contactToDelete.priority
+          }
+        },
+        data: {
+          priority: {
+            decrement: 1
+          }
+        }
+      })
+
+      return deleted
     })
   }
 
