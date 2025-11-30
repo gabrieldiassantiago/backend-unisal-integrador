@@ -1,53 +1,52 @@
-interface EmailCodeVerificationProps {
-  code: string;
-  userName: string;
-}
-
-export const emailCodeVerificationTemplate = ({ code, userName }: EmailCodeVerificationProps) => `
+export const emailCodeVerificationTemplate = (code: string, userName: string) => `
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="format-detection" content="telephone=no">
   <title>Código de Verificação InteliSensor</title>
   <style type="text/css">
-    body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-    table, td { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
-    img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
-    p { display: block; margin: 13px 0; }
+    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F5F5F7; color: #1D1D1F; }
+    table { border-collapse: collapse; }
+    h1 { margin: 0; }
   </style>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F5F5F7; color: #1D1D1F;">
+<body style="margin: 0; padding: 0; background-color: #F5F5F7;">
   
-  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #F5F5F7;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #F5F5F7;">
     <tr>
       <td align="center" style="padding: 40px 20px;">
         
-        <table role="presentation" style="max-width: 520px; width: 100%; background-color: #FFFFFF; border-radius: 20px; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04); overflow: hidden;">
+        <!-- Cartão Principal -->
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 480px; background-color: #FFFFFF; border-radius: 24px; box-shadow: 0 8px 30px rgba(0,0,0,0.04); overflow: hidden;">
           
+          <!-- Logo Header -->
           <tr>
-            <td align="center" style="padding: 40px 40px 20px 40px;">
-              <img src="https://i.imgur.com/JuRCheh.png" alt="InteliSensor" width="280" style="display: block; border: 0; max-width: 100%; object-fit: contain;" />
+            <td align="center" style="padding: 48px 0 24px 0;">
+               <!-- SVG Compacto e Centralizado -->
+               <img src="https://i.imgur.com/JuRCheh.png" width="180" alt="InteliSensor" style="display: block; border: 0; user-select: none;" />
+               <!-- Nota: Se preferir o SVG inline estrito, use o bloco abaixo, mas img tag é 100% mais seguro para email -->
             </td>
           </tr>
           
+          <!-- Conteúdo -->
           <tr>
-            <td style="padding: 0 40px 40px 40px; text-align: center;">
+            <td align="center" style="padding: 0 40px 48px 40px;">
               
-              <h1 style="margin: 0 0 12px 0; font-size: 28px; font-weight: 700; color: #1D1D1F; letter-spacing: -0.5px;">
+              <h1 style="font-size: 24px; font-weight: 700; color: #1D1D1F; letter-spacing: -0.5px; margin-bottom: 12px;">
                 Verifique seu login
               </h1>
               
-              <p style="margin: 0 0 32px 0; font-size: 16px; line-height: 1.5; color: #86868B;">
-                Olá, ${userName}. Use o código abaixo para finalizar seu acesso ao <strong>InteliSensor</strong>.
+              <p style="font-size: 15px; line-height: 1.5; color: #86868B; margin: 0 0 32px 0;">
+                Olá, ${userName}.<br>Use o código abaixo para acessar o <strong>InteliSensor</strong>.
               </p>
               
-              <table role="presentation" style="width: 100%; margin: 0 auto;">
+              <!-- Caixa do Código -->
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
                 <tr>
                   <td align="center">
-                    <div style="background-color: #F5F5F7; border-radius: 12px; padding: 24px; display: inline-block; width: 100%; box-sizing: border-box;">
-                      <span style="font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 36px; font-weight: 600; color: #000000; letter-spacing: 6px; display: block;">
+                    <div style="background-color: #F5F5F7; border-radius: 16px; padding: 20px 0; width: 100%; max-width: 320px;">
+                      <span style="font-family: SF Mono, Menlo, monospace; font-size: 32px; font-weight: 600; color: #1D1D1F; letter-spacing: 6px; display: block; text-align: center;">
                         ${code}
                       </span>
                     </div>
@@ -56,17 +55,19 @@ export const emailCodeVerificationTemplate = ({ code, userName }: EmailCodeVerif
               </table>
 
               <p style="margin: 24px 0 0 0; font-size: 13px; color: #86868B;">
-                Este código expira em 10 minutos.
+                Válido por 10 minutos.
               </p>
 
-              <div style="height: 1px; background-color: #E5E5EA; margin: 32px 0;"></div>
+              <!-- Divisor -->
+              <div style="height: 1px; background-color: #E5E5EA; margin: 32px 0; width: 100%;"></div>
 
-              <table role="presentation" width="100%">
+              <!-- Rodapé de Segurança -->
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
                 <tr>
                   <td align="center">
-                    <img src="https://img.icons8.com/ios-glyphs/30/86868b/lock--v1.png" width="16" height="16" alt="lock" style="margin-bottom: 8px; opacity: 0.6;" />
-                    <p style="margin: 0; font-size: 12px; color: #86868B; line-height: 1.4; max-width: 300px;">
-                      Se você não solicitou este código, não se preocupe. Sua conta está segura e nenhuma ação é necessária.
+                    <img src="https://img.icons8.com/material-outlined/24/86868b/lock--v1.png" width="16" height="16" alt="" style="vertical-align: middle; opacity: 0.7; margin-bottom: 8px;" />
+                    <p style="margin: 0; font-size: 12px; color: #86868B; line-height: 1.4; max-width: 280px;">
+                      Se não foi você, fique tranquilo. Sua conta está segura.
                     </p>
                   </td>
                 </tr>
@@ -77,12 +78,12 @@ export const emailCodeVerificationTemplate = ({ code, userName }: EmailCodeVerif
           
         </table>
         
-        <table role="presentation" style="max-width: 520px; width: 100%; margin-top: 24px;">
+        <!-- Footer Externo -->
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 24px;">
           <tr>
             <td align="center">
-              <p style="margin: 0; font-size: 11px; color: #86868B; text-align: center;">
-                InteliSensor • Monitoramento Inteligente<br>
-                Enviado automaticamente pelo sistema.
+              <p style="font-size: 11px; color: #86868B; margin: 0;">
+                InteliSensor • Segurança e Monitoramento
               </p>
             </td>
           </tr>
