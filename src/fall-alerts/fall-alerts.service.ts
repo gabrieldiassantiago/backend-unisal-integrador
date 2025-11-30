@@ -22,10 +22,11 @@ export class FallAlertsService {
     private readonly gateway: FallAlertsGateway,
     private readonly messagingService: MessagingService,
     private readonly familyService: FamilyService,
-    private readonly logger: Logger
   ) {
     this.expo = new Expo();
   }
+
+  private readonly logger = new Logger(FallAlertsService.name);
 
   /**
    * Enviar notificacao push via Expo Push Service (instavel)
