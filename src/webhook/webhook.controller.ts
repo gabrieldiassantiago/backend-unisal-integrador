@@ -1,6 +1,7 @@
 import { Controller, Post, Body, Logger, Headers } from '@nestjs/common';
 import { FallAlertsService } from '../fall-alerts/fall-alerts.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MessagingService } from '@src/messaging/messaging.service';
 
 @Controller('webhook')
 export class WebhookController {
@@ -9,6 +10,7 @@ export class WebhookController {
   constructor(
     private readonly fallAlertsService: FallAlertsService,
     private readonly prismaService: PrismaService,
+    private readonly messagingService: MessagingService,
   ) { }
 
   /**
@@ -424,6 +426,19 @@ export class WebhookController {
           this.logger.log(`✅ Falso alarme confirmado!`);
           break;
 
+        case 'resolve_alert':
+          this.logger.log(`🏁 Finalizando alerta ${alert.id}...`);
+          await this.fallAlertsService.markResolved(alert.id);
+
+          result = { action: 'alert_resolved', alertId: alert.id };
+
+          // Enviar mensagem final de agradecimento
+          await this.messagingService.sendText(
+            phoneNumber,
+            `✅ *Obrigado!* \n\nO alerta de ${contact.patient.name} foi fechado como resolvido. O monitoramento continua ativo.`
+          );
+          break;
+
         default:
           this.logger.warn(`⚠️ Ação desconhecida: ${action}`);
           return { status: 'error', reason: 'unknown_action', action };
@@ -444,6 +459,8 @@ export class WebhookController {
       throw error;
     }
   }
+
+
 
   /**
    * Endpoint de teste (útil para desenvolvimento)

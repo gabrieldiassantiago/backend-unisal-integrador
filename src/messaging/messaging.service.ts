@@ -99,6 +99,36 @@ export class MessagingService {
     }
   }
 
+  async sendResolutionCheck(params: {
+    to: string;
+    alertId: string;
+    patientName: string;
+    contactName: string;
+  }): Promise<any> {
+    this.logger.log(`🕵️ Enviando checagem de resolução para ${params.contactName}`);
+
+    // Tenta enviar com botões, mas o texto já instrui o uso do "1" caso botões falhem
+    return await this.sendButtons({
+      to: params.to,
+      title: '✅ ATENDIMENTO FINALIZADO?',
+      description: `Olá, ${params.contactName}.
+
+O alerta de queda de *${params.patientName}* ainda consta como "CONFIRMADO/EMERGÊNCIA".
+
+A situação já foi resolvida e o paciente está bem?
+
+Responda com:
+1️⃣ ou clique abaixo para finalizar.`,
+      footer: '🤖 Sistema InteliSensor',
+      buttons: [
+        {
+          id: `resolve_alert_${params.alertId}`,
+          title: '✅ Sim, Resolvido',
+        }
+      ],
+    });
+  }
+
   /**
    * Enviar enquete (Poll) via Evolution API
    */

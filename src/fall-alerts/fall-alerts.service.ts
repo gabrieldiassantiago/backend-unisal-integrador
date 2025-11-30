@@ -9,6 +9,8 @@ import { FamilyService } from '@src/family/family.service';
 import { MessagingService } from '@src/messaging/messaging.service';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { DeviceNotFoundException } from '@src/common/exceptions/custom.exceptions';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class FallAlertsService {
@@ -20,6 +22,7 @@ export class FallAlertsService {
     private readonly gateway: FallAlertsGateway,
     private readonly messagingService: MessagingService,
     private readonly familyService: FamilyService,
+    private readonly logger: Logger
   ) {
     this.expo = new Expo();
   }
@@ -27,6 +30,98 @@ export class FallAlertsService {
   /**
    * Enviar notificacao push via Expo Push Service (instavel)
    */
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+
+  async checkConfirmedAlertsJob() {
+    this.logger.log('🕵️ Executando Job: Verificar alertas confirmados...');
+
+    // Buscar alertas CONFIRMED que foram atualizados há mais de 10 minutos
+    // (Damos um tempo para o atendimento acontecer antes de cobrar)
+
+    const alerts = await this.prismaService.fallAlert.findMany({
+      where: {
+        status: 'CONFIRMED',
+        // Evitar spam: podemos criar um campo 'lastNotificationSentAt' no banco futuramente
+        // Por enquanto, vamos pegar todos os confirmados antigos.
+      },
+      include: {
+        patient: true,
+      },
+    });
+
+    if (alerts.length === 0) {
+      this.logger.log('✅ Nenhum alerta confirmado pendente de verificação.');
+      return;
+    }
+
+    this.logger.log(`⚠️ Encontrados ${alerts.length} alertas confirmados antigos.`);
+
+    for (const alert of alerts) {
+      // Prioridade: Mandar para quem respondeu (respondedBy). Se não tiver, manda para o contato 1.
+      let targetPhone = null;
+      let targetName = 'Cuidador';
+
+      if (alert.respondedBy) {
+        const user = await this.prismaService.user.findUnique({ where: { id: alert.respondedBy } });
+        if (user?.phone) {
+          targetPhone = user.phone;
+          targetName = user.name;
+        }
+      }
+
+      // Fallback: Contato de emergência prioritário
+      if (!targetPhone) {
+        const contact = await this.prismaService.emergencyContact.findFirst({
+          where: { patientId: alert.patientId },
+          orderBy: { priority: 'asc' },
+        });
+        if (contact) {
+          targetPhone = contact.phone;
+          targetName = contact.name;
+        }
+      }
+
+      if (targetPhone) {
+        try {
+          await this.messagingService.sendResolutionCheck({
+            to: targetPhone,
+            alertId: alert.id,
+            patientName: alert.patient.name,
+            contactName: targetName,
+          });
+        } catch (e) {
+          this.logger.error(`Erro ao notificar resolução alerta ${alert.id}: ${e.message}`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Marcar alerta como RESOLVIDO (Finalizado)
+   */
+  async markResolved(alertId: string) {
+    const alert = await this.prismaService.fallAlert.findUnique({ where: { id: alertId } });
+    if (!alert) throw new NotFoundException('Alerta não encontrado');
+
+    const updated = await this.prismaService.fallAlert.update({
+      where: { id: alertId },
+      data: {
+        status: 'RESOLVED',
+      },
+    });
+
+    this.logger.log(`✅ Alerta ${alertId} marcado como RESOLVED via WhatsApp.`);
+
+    // Emitir socket para atualizar o painel
+    this.gateway.emitAlertStatusChange({
+      id: updated.id,
+      patientId: updated.patientId,
+      status: 'RESOLVED',
+    });
+
+    return updated;
+  }
 
   private async sendExpoPushNotifications(
     tokens: string[],
@@ -203,7 +298,6 @@ export class FallAlertsService {
       throw new DeviceNotFoundException(data.serial);
     }
 
-    console.time('Create alert in DB');
     const alert = await this.prismaService.fallAlert.create({
       data: {
         deviceId: device.id,
@@ -222,7 +316,6 @@ export class FallAlertsService {
         status: true
       }
     });
-    console.timeEnd('Create alert in DB');
 
     const payload = {
       id: alert.id,
@@ -234,12 +327,12 @@ export class FallAlertsService {
       statusAlert: alert.status,
     };
 
-    // ✅ EMITIR WEBSOCKET IMEDIATAMENTE (SÍNCRONO)
+    //  EMITIR WEBSOCKET IMEDIATAMENTE (SÍNCRONO)
     console.log('🚀 Emitindo WebSocket newAlert IMEDIATAMENTE...');
     this.gateway.emitNewAlert(payload);
     console.log('✅ WebSocket newAlert emitido!');
 
-    // ✅ PUSH NOTIFICATIONS IMEDIATO (não espera)
+    //  PUSH NOTIFICATIONS IMEDIATO (não espera)
     this.sendPushNotificationsToRelatedUsers(
       device.patientId,
       device.patient.name,
@@ -248,7 +341,7 @@ export class FallAlertsService {
       alert.longitude
     ).catch(err => console.error('Erro ao enviar push:', err));
 
-    // ✅ Jobs em background (sem delay inicial para jobs críticos)
+    //  Jobs em background (sem delay inicial para jobs críticos)
     Promise.all([
       // Job de WhatsApp + Chamada - SEM DELAY
       this.alertsQueue.add(
