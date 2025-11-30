@@ -5,8 +5,8 @@ import axios, { AxiosInstance } from 'axios';
 export class MessagingService {
   private readonly logger = new Logger(MessagingService.name);
   private httpClient: AxiosInstance;
-  private readonly apiKey = process.env.API_KEY_MESSAGE;
-  private readonly baseUrl = process.env.BASE_URL_MESSAGE;
+  private readonly apiKey = 'B0F1888ADAE4-4C72-B849-B12709F80913'
+  private readonly baseUrl = 'http://104.248.184.126:8080'
 
   constructor() {
     this.httpClient = axios.create({
