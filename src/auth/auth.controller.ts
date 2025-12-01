@@ -9,16 +9,16 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 @ApiTags('Autenticação')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
 
   @Post('login')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Login de usuário cuidador',
-    description: 'Autentica um usuário cuidador e retorna um token JWT' 
+    description: 'Autentica um usuário cuidador e retorna um token JWT'
   })
   @ApiBody({ type: LoginDto })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Login realizado com sucesso',
     type: LoginResponseDto,
     schema: {
@@ -33,8 +33,8 @@ export class AuthController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 401, 
+  @ApiResponse({
+    status: 401,
     description: 'Credenciais inválidas',
     schema: {
       example: {
@@ -50,18 +50,18 @@ export class AuthController {
     if (!user) {
       throw new UnauthorizedException('E-mail ou senha inválidos.');
     }
-    
+
     return this.authService.login(user);
   }
 
   @Post('family/login')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Login de familiar',
-    description: 'Autentica um usuário familiar e retorna um token JWT com permissões específicas' 
+    description: 'Autentica um usuário familiar e retorna um token JWT com permissões específicas'
   })
   @ApiBody({ type: FamilyMemberLoginDto })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Login realizado com sucesso',
     schema: {
       example: {
@@ -89,8 +89,8 @@ export class AuthController {
       }
     }
   })
-  @ApiResponse({ 
-    status: 401, 
+  @ApiResponse({
+    status: 401,
     description: 'Credenciais inválidas',
     schema: {
       example: {
@@ -100,46 +100,50 @@ export class AuthController {
       }
     }
   })
-  
+
   async familyLogin(@Body() loginDto: FamilyMemberLoginDto) {
     const user = await this.authService.validateUser(loginDto.email, loginDto.password);
 
     if (!user) {
       throw new UnauthorizedException('E-mail ou senha inválidos.');
     }
-    
+
     return this.authService.login(user);
   }
 
- /* @Patch('reset-password')
-  @ApiOperation({ 
-    summary: 'Resetar senha do usuário',
-    description: 'Permite resetar a senha de um usuário existente' 
-  })
- 
-  @ApiResponse({ 
-    status: 400, 
-    description: 'Usuário não encontrado',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: 'Usuário não encontrado',
-        error: 'Bad Request'
-      }
-    }
-  })
-  async resetPassword(@Body() resetPasswordDto) {
-    return this.authService.resetPassword(resetPasswordDto.email, resetPasswordDto.password);
-  }
-  */
+  /* @Patch('reset-password')
+   @ApiOperation({ 
+     summary: 'Resetar senha do usuário',
+     description: 'Permite resetar a senha de um usuário existente' 
+   })
+  
+   @ApiResponse({ 
+     status: 400, 
+     description: 'Usuário não encontrado',
+     schema: {
+       example: {
+         statusCode: 400,
+         message: 'Usuário não encontrado',
+         error: 'Bad Request'
+       }
+     }
+   })
+   async resetPassword(@Body() resetPasswordDto) {
+     return this.authService.resetPassword(resetPasswordDto.email, resetPasswordDto.password);
+   }
+   */
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(200)
-  async logout(@Request() req) {
-    
-    await this.authService.logout(req.user.userId);
-    
+  async logout(@Request() req, @Body() body: {
+    pushToken?: string;
+  }) {
+
+    const userId = req.user.userId || req.user.sub || req.user.id;
+
+    await this.authService.logout(userId, body.pushToken);
+
     return { message: 'Logout realizado com sucesso' };
   }
 }
