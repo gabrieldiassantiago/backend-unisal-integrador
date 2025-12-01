@@ -329,7 +329,7 @@ export class FamilyService {
     });
   }
 
-  async getFamilyPatients(familyMemberId: string): Promise<FamilyPatientResponseDto[]> {
+  async getFamilyPatients(familyMemberId: string) {
     const familyRelations = await this.prisma.familyRelation.findMany({
       where: {
         familyMemberId,
@@ -337,11 +337,20 @@ export class FamilyService {
         revokedAt: null,
       },
       include: {
-        patient: true,
+        patient: {
+          include: {
+            fallAlerts: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+            }
+          }
+        },
         permissions: true,
       },
     });
 
+    //aqui?
     return familyRelations.map((relation) => ({
       id: relation.patient.id,
       name: relation.patient.name,
@@ -356,6 +365,7 @@ export class FamilyService {
         canManageContacts: relation.permissions?.canManageContacts ?? false,
         canInviteFamily: relation.permissions?.canInviteFamily ?? false,
       },
+      fallAlerts: relation.patient.fallAlerts,
     }));
   }
 
