@@ -59,6 +59,7 @@ export class EmergencyContactsService {
       if (!contactToDelete) {
         throw new Error('Contato não encontrado');
       }
+
       const deleted = await tx.emergencyContact.delete({
         where: { id: contactId }
       })
