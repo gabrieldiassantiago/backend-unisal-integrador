@@ -337,26 +337,36 @@ export class FamilyService {
         revokedAt: null,
       },
       include: {
+        // 👇 ALTERAÇÃO 1: Aninhar o include dos alertas dentro do paciente
         patient: {
           include: {
             fallAlerts: {
-              orderBy: {
-                createdAt: 'desc',
-              },
-            }
-          }
+              orderBy: { createdAt: 'desc' }, // Ordenar pelos mais recentes
+              take: 5, // (Opcional) Limitar aos 5 últimos para não pesar a requisição
+            },
+          },
         },
         permissions: true,
       },
     });
 
-    //aqui?
     return familyRelations.map((relation) => ({
       id: relation.patient.id,
       name: relation.patient.name,
       birthDate: relation.patient.birthDate,
       gender: relation.patient.gender,
       age: calcAge(relation.patient.birthDate),
+
+      alerts: relation.patient.fallAlerts.map((alert) => ({
+        id: alert.id,
+        status: alert.status,
+        createdAt: alert.createdAt,
+        location: alert.location,
+        latitude: alert.latitude,
+        longitude: alert.longitude,
+        respondedAt: alert.respondedAt,
+      })),
+
       permissions: {
         canViewAlerts: relation.permissions?.canViewAlerts ?? true,
         canRespondAlerts: relation.permissions?.canRespondAlerts ?? false,
@@ -365,7 +375,6 @@ export class FamilyService {
         canManageContacts: relation.permissions?.canManageContacts ?? false,
         canInviteFamily: relation.permissions?.canInviteFamily ?? false,
       },
-      fallAlerts: relation.patient.fallAlerts,
     }));
   }
 
