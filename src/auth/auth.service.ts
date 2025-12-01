@@ -1,8 +1,8 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import {PrismaService} from '../prisma/prisma.service'
+import { PrismaService } from '../prisma/prisma.service'
 import * as bcrypt from 'bcrypt';
-import { v4 as uuidv4 } from 'uuid'; 
+import { v4 as uuidv4 } from 'uuid';
 import { LoginResponseDto } from './dtos/login-response.dto';
 import { SessionService } from './session.service';
 
@@ -13,12 +13,12 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private sessionService: SessionService,
-  ) {}
+  ) { }
 
   // Método para suportar CAREGIVER e FAMILY_MEMBER
 
   async validateUser(email: string, password: string) {
-    
+
     const user = await this.prisma.user.findUnique({ where: { email } });
 
     if (!user) return {
@@ -45,16 +45,16 @@ export class AuthService {
   }
 
 
-  async login(user: any) : Promise <LoginResponseDto> {
+  async login(user: any): Promise<LoginResponseDto> {
 
     // Criar uma nova sessão
 
     const sessionId = await this.sessionService.createSession(user.id);
 
-    let payload: any = { 
-      sub: user.id, 
-      email: user.email, 
-      role: user.role, 
+    let payload: any = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
       name: user.name,
       sessionId: sessionId,
     };
@@ -101,32 +101,41 @@ export class AuthService {
       user: payload,
     };
   }
-  
 
-    /*
-    async resetPassword(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({where: {email}});
 
-    if (!user) {
-      throw new Error('Usuário não encontrado');
+  /*
+  async resetPassword(email: string, password: string) {
+  const user = await this.prisma.user.findUnique({where: {email}});
+
+  if (!user) {
+    throw new Error('Usuário não encontrado');
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  await this.prisma.user.update({
+    where: {email},
+    data: {
+      password: hashedPassword
     }
+  })
+  return {
+    message: 'Senha resetada com sucesso',
+  }
+} 
+*/
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    await this.prisma.user.update({
-      where: {email},
-      data: {
-        password: hashedPassword
-      }
-    })
-    return {
-      message: 'Senha resetada com sucesso',
-    }
-  } 
-  */
- 
-  async logout(userId: string) : Promise<{ message: string }> {
-   
+  async logout(userId: string, expoToken?: string): Promise<{ message: string }> {
+
     await this.sessionService.invalidateSession(userId);
+
+    if (expoToken) {
+      await this.prisma.pushToken.delete({
+        where: {
+          token: expoToken,
+          userId: userId
+        }
+      })
+    }
 
     return {
       message: "Logout realizado com sucesso"
