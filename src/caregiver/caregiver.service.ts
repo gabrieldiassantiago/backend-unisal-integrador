@@ -38,6 +38,7 @@ export class CaregiverService {
       where: { deviceIdentifier: dto.deviceSerial },
       select: { id: true, patientId: true },
     });
+    
     if (existing?.patientId) {
       throw new ConflictException('Este dispositivo já está pareado com outro paciente.');
     }
