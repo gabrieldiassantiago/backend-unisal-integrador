@@ -24,7 +24,7 @@ export const emailCodeVerificationTemplate = (code: string, userName: string) =>
           <tr>
             <td align="center" style="padding: 48px 0 24px 0;">
                <!-- SVG Compacto e Centralizado -->
-               <img src="https://i.imgur.com/JuRCheh.png" width="180" alt="InteliSensor" style="display: block; border: 0; user-select: none;" />
+          <img src="cid:logo.svg" width="180" alt="InteliSensor" />
                <!-- Nota: Se preferir o SVG inline estrito, use o bloco abaixo, mas img tag é 100% mais seguro para email -->
             </td>
           </tr>
@@ -65,7 +65,7 @@ export const emailCodeVerificationTemplate = (code: string, userName: string) =>
               <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
                 <tr>
                   <td align="center">
-                    <img src="https://img.icons8.com/material-outlined/24/86868b/lock--v1.png" width="16" height="16" alt="" style="vertical-align: middle; opacity: 0.7; margin-bottom: 8px;" />
+                    <img src="cid:lock.png" width="16" height="16" alt="" style="vertical-align: middle; opacity: 0.7; margin-bottom: 8px;" />
                     <p style="margin: 0; font-size: 12px; color: #86868B; line-height: 1.4; max-width: 280px;">
                       Se não foi você, fique tranquilo. Sua conta está segura.
                     </p>
