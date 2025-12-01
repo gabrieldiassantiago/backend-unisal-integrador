@@ -24,7 +24,7 @@ export const emailCodeVerificationTemplate = (code: string, userName: string) =>
           <tr>
             <td align="center" style="padding: 48px 0 24px 0;">
                <!-- SVG Compacto e Centralizado -->
-          <img src="cid:logo.svg" width="180" alt="InteliSensor" />
+          <img src="cid:logo.png" width="180" alt="InteliSensor" />
                <!-- Nota: Se preferir o SVG inline estrito, use o bloco abaixo, mas img tag é 100% mais seguro para email -->
             </td>
           </tr>

@@ -37,12 +37,12 @@ export class EmailService implements OnModuleInit {
     try {
       const emailContent = this.generateVerificationEmailHtml(code, userName);
 
-      const logoPath = path.join(__dirname, 'templates', 'assets', 'logo.svg');
+      const logoPath = path.join(__dirname, 'templates', 'assets', 'logo.png');
       const lockPath = path.join(__dirname, 'templates', 'assets', 'lock.png');
 
       const inlineFiles = [
         {
-          filename: 'logo.svg',
+          filename: 'logo.png',
           data: fs.readFileSync(logoPath),
         },
         {
