@@ -27,67 +27,6 @@ export class FallAlertsService {
   }
 
   /**
-   * Enviar notificacao push via Expo Push Service (instavel)
-   */
-  @Cron(CronExpression.EVERY_5_MINUTES)
-  async checkConfirmedAlertsJob() {
-    this.logger.log('🕵️ Executando Job: Verificar alertas confirmados...');
-
-    const alerts = await this.prismaService.fallAlert.findMany({
-      where: {
-        status: 'CONFIRMED',
-      },
-      include: {
-        patient: true,
-      },
-    });
-
-    if (alerts.length === 0) {
-      this.logger.log('✅ Nenhum alerta confirmado pendente de verificação.');
-      return;
-    }
-
-    this.logger.log(`⚠️ Encontrados ${alerts.length} alertas confirmados antigos.`);
-
-    for (const alert of alerts) {
-      let targetPhone = null;
-      let targetName = 'Cuidador';
-
-      if (alert.respondedBy) {
-        const user = await this.prismaService.user.findUnique({ where: { id: alert.respondedBy } });
-        if (user?.phone) {
-          targetPhone = user.phone;
-          targetName = user.name;
-        }
-      }
-
-      if (!targetPhone) {
-        const contact = await this.prismaService.emergencyContact.findFirst({
-          where: { patientId: alert.patientId },
-          orderBy: { priority: 'asc' },
-        });
-        if (contact) {
-          targetPhone = contact.phone;
-          targetName = contact.name;
-        }
-      }
-
-      if (targetPhone) {
-        try {
-          await this.messagingService.sendResolutionCheck({
-            to: targetPhone,
-            alertId: alert.id,
-            patientName: alert.patient.name,
-            contactName: targetName,
-          });
-        } catch (e) {
-          this.logger.error(`Erro ao notificar resolução alerta ${alert.id}: ${e.message}`);
-        }
-      }
-    }
-  }
-
-  /**
    * Marcar alerta como RESOLVIDO (Finalizado)
    * REFATORADO: Agora notifica via Push
    */
