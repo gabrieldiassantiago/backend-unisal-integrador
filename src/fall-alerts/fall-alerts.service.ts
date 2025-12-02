@@ -468,7 +468,9 @@ export class FallAlertsService {
               where: { id: alertId },
             });
 
-            const alertTime = buscarTempoAlerta.createdAt.toLocaleString('pt-BR');
+            const alertTime = buscarTempoAlerta.createdAt.toLocaleString('pt-BR', {
+              timeZone: 'America/Sao_Paulo',
+            });
 
             const msg =
               `Se você está recebendo esta mensagem, é porque ` +
