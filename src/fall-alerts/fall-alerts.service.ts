@@ -460,8 +460,14 @@ export class FallAlertsService {
           try {
 
             if (contact.priority === 1) {
-              this.logger.log(`Contato prioridade 1 (${contact.name}) – NÃO receberá aviso de falso alarme.`);
-              continue;
+              try {
+                await this.messagingService.sendFalseAlarm(
+                  contact.phone,
+                  'Recebemos sua mensagem, obrigado por avisar a gente que foi um falso alarme'
+                );
+              } catch (whatsappError) {
+                this.logger.error(`Erro ao enviar WhatsApp para ${contact.name}:`, whatsappError.message);
+              }
             }
 
             const buscarTempoAlerta = await this.prismaService.fallAlert.findUnique({
