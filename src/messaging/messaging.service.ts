@@ -407,16 +407,8 @@ Cada segundo conta! 🙏${priorityText}`;
   /**
    * Enviar notificação de falso alarme
    */
-  async sendFalseAlarm(to: string, patientName: string, responderName: string): Promise<any> {
-    const message = `✅ *FALSO ALARME*
-
-Oi! 😊
-
-Boas notícias sobre *${patientName}*!
-
-${responderName} confirmou que foi um *falso alarme*. Tudo está bem! ✨
-
-Você pode ficar tranquilo(a). 💚`;
+  async sendFalseAlarm(to: string, msg: string): Promise<any> {
+    const message = `${msg}`;
 
     return await this.sendText(to, message);
   }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { FallAlertsGateway } from './fall-alerts.gateway';
 import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
@@ -10,11 +10,11 @@ import { MessagingService } from '@src/messaging/messaging.service';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { DeviceNotFoundException } from '@src/common/exceptions/custom.exceptions';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class FallAlertsService {
   private expo: Expo;
+  private readonly logger = new Logger(FallAlertsService.name);
 
   constructor(
     @InjectQueue('fall-alerts') private alertsQueue: Queue,
@@ -26,25 +26,16 @@ export class FallAlertsService {
     this.expo = new Expo();
   }
 
-  private readonly logger = new Logger(FallAlertsService.name);
-
   /**
    * Enviar notificacao push via Expo Push Service (instavel)
    */
-
   @Cron(CronExpression.EVERY_5_MINUTES)
-
   async checkConfirmedAlertsJob() {
     this.logger.log('🕵️ Executando Job: Verificar alertas confirmados...');
-
-    // Buscar alertas CONFIRMED que foram atualizados há mais de 10 minutos
-    // (Damos um tempo para o atendimento acontecer antes de cobrar)
 
     const alerts = await this.prismaService.fallAlert.findMany({
       where: {
         status: 'CONFIRMED',
-        // Evitar spam: podemos criar um campo 'lastNotificationSentAt' no banco futuramente
-        // Por enquanto, vamos pegar todos os confirmados antigos.
       },
       include: {
         patient: true,
@@ -59,7 +50,6 @@ export class FallAlertsService {
     this.logger.log(`⚠️ Encontrados ${alerts.length} alertas confirmados antigos.`);
 
     for (const alert of alerts) {
-      // Prioridade: Mandar para quem respondeu (respondedBy). Se não tiver, manda para o contato 1.
       let targetPhone = null;
       let targetName = 'Cuidador';
 
@@ -71,7 +61,6 @@ export class FallAlertsService {
         }
       }
 
-      // Fallback: Contato de emergência prioritário
       if (!targetPhone) {
         const contact = await this.prismaService.emergencyContact.findFirst({
           where: { patientId: alert.patientId },
@@ -100,9 +89,15 @@ export class FallAlertsService {
 
   /**
    * Marcar alerta como RESOLVIDO (Finalizado)
+   * REFATORADO: Agora notifica via Push
    */
   async markResolved(alertId: string) {
-    const alert = await this.prismaService.fallAlert.findUnique({ where: { id: alertId } });
+    // Adicionado include patient para ter o nome na notificação
+    const alert = await this.prismaService.fallAlert.findUnique({
+      where: { id: alertId },
+      include: { patient: true }
+    });
+
     if (!alert) throw new NotFoundException('Alerta não encontrado');
 
     const updated = await this.prismaService.fallAlert.update({
@@ -121,6 +116,18 @@ export class FallAlertsService {
       status: 'RESOLVED',
     });
 
+    // Enviar Push de Resolvido
+    this.sendPushNotificationsToRelatedUsers(
+      updated.patientId,
+      alert.patient.name,
+      updated.id,
+      'Atendimento Finalizado',
+      `A situação com ${alert.patient.name} foi resolvida.`,
+      'resolved',
+      alert.latitude,
+      alert.longitude
+    ).catch(err => this.logger.error('Erro ao enviar push de resolvido:', err));
+
     return updated;
   }
 
@@ -135,7 +142,7 @@ export class FallAlertsService {
 
       for (const pushToken of tokens) {
         if (!Expo.isExpoPushToken(pushToken)) {
-          console.error(`Token invalido: ${pushToken}`);
+          this.logger.error(`Token invalido: ${pushToken}`);
           continue;
         }
 
@@ -155,38 +162,39 @@ export class FallAlertsService {
       for (const chunk of chunks) {
         try {
           const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
-          console.log('Push notifications enviadas:', ticketChunk);
+          this.logger.log('Push notifications enviadas:', ticketChunk);
 
           ticketChunk.forEach((ticket, index) => {
             if (ticket.status === 'error') {
-              console.error(`Erro no ticket ${index}:`, ticket.message);
+              this.logger.error(`Erro no ticket ${index}:`, ticket.message);
             }
           });
         } catch (error) {
-          console.error('Erro ao enviar chunk:', error);
+          this.logger.error('Erro ao enviar chunk:', error);
         }
       }
     } catch (error) {
-      console.error('Erro ao enviar push notifications:', error.message);
+      this.logger.error('Erro ao enviar push notifications:', error.message);
     }
   }
 
   /**
    * Enviar push para todos os usuarios relacionados ao paciente
+   * REFATORADO: Agora aceita titulo, corpo e tipo
    */
   private async sendPushNotificationsToRelatedUsers(
     patientId: string,
     patientName: string,
     alertId: string,
+    title: string,       // Novo parâmetro
+    body: string,        // Novo parâmetro
+    type: string,        // Novo parâmetro ('fall_alert', 'false_alarm', 'resolved')
     latitude?: number,
     longitude?: number
   ) {
     try {
-      console.log(`\n========================================`);
-      console.log(`ENVIANDO PUSH NOTIFICATIONS`);
-      console.log(`Paciente: ${patientName}`);
-      console.log(`Alerta: ${alertId}`);
-      console.log(`========================================\n`);
+      this.logger.log(`\n=== ENVIANDO PUSH (${type}) ===`);
+      this.logger.log(`Paciente: ${patientName} | Alerta: ${alertId}`);
 
       // Buscar cuidadores relacionados ao paciente
       const caregiverRelations = await this.prismaService.caregiverPatient.findMany({
@@ -196,11 +204,7 @@ export class FallAlertsService {
             select: {
               id: true,
               name: true,
-              pushTokens: {
-                select: {
-                  token: true
-                }
-              }
+              pushTokens: { select: { token: true } }
             }
           }
         }
@@ -218,11 +222,7 @@ export class FallAlertsService {
             select: {
               id: true,
               name: true,
-              pushTokens: {
-                select: {
-                  token: true
-                }
-              }
+              pushTokens: { select: { token: true } }
             }
           }
         }
@@ -230,35 +230,25 @@ export class FallAlertsService {
 
       const tokens: string[] = [];
 
-      // Coletar tokens dos cuidadores
       caregiverRelations.forEach(relation => {
-        relation.caregiver.pushTokens.forEach(pushToken => {
-          tokens.push(pushToken.token);
-          console.log(`Token adicionado: ${relation.caregiver.name}`);
-        });
+        relation.caregiver.pushTokens.forEach(pushToken => tokens.push(pushToken.token));
       });
 
-      // Coletar tokens dos familiares
       familyRelations.forEach(relation => {
-        relation.familyMember.pushTokens.forEach(pushToken => {
-          tokens.push(pushToken.token);
-          console.log(`Token adicionado: ${relation.familyMember.name}`);
-        });
+        relation.familyMember.pushTokens.forEach(pushToken => tokens.push(pushToken.token));
       });
 
       if (tokens.length === 0) {
-        console.log('Nenhum token push encontrado');
+        this.logger.warn('Nenhum token push encontrado');
         return;
       }
 
-      console.log(`Total de tokens: ${tokens.length}`);
-
       await this.sendExpoPushNotifications(
         tokens,
-        'CRITICO - Alerta de Queda',
-        `${patientName} pode ter caido!`,
+        title,
+        body,
         {
-          type: 'fall_alert',
+          type: type,
           alertId,
           patientName,
           patientId,
@@ -268,16 +258,15 @@ export class FallAlertsService {
         }
       );
 
-      console.log(`Push notifications enviadas com sucesso!\n`);
+      this.logger.log(`Push notifications enviadas com sucesso!\n`);
     } catch (error) {
-      console.error('Erro ao enviar push notifications:', error);
+      this.logger.error('Erro ao enviar push notifications:', error);
     }
   }
 
   /**
    * Criar novo alerta de queda
    */
-
   async createAlert(data: CreateFallAlertDto) {
     const device = await this.prismaService.device.findUnique({
       where: { deviceIdentifier: data.serial },
@@ -329,22 +318,24 @@ export class FallAlertsService {
     };
 
     //  EMITIR WEBSOCKET IMEDIATAMENTE (SÍNCRONO)
-    console.log('🚀 Emitindo WebSocket newAlert IMEDIATAMENTE...');
+    this.logger.log('🚀 Emitindo WebSocket newAlert IMEDIATAMENTE...');
     this.gateway.emitNewAlert(payload);
-    console.log('✅ WebSocket newAlert emitido!');
 
     //  PUSH NOTIFICATIONS IMEDIATO (não espera)
+    // REFATORADO: Passando parâmetros de alerta crítico
     this.sendPushNotificationsToRelatedUsers(
       device.patientId,
       device.patient.name,
       alert.id,
+      'CRITICO - Alerta de Queda',
+      `${device.patient.name} pode ter caido!`,
+      'fall_alert',
       alert.latitude,
       alert.longitude
-    ).catch(err => console.error('Erro ao enviar push:', err));
+    ).catch(err => this.logger.error('Erro ao enviar push:', err));
 
     //  Jobs em background (sem delay inicial para jobs críticos)
     Promise.all([
-      // Job de WhatsApp + Chamada - SEM DELAY
       this.alertsQueue.add(
         'processInitialAlert',
         {
@@ -353,10 +344,8 @@ export class FallAlertsService {
           latitude: data.latitude,
           longitude: data.longitude
         },
-        { priority: 10 } // Removido delay
+        { priority: 10 }
       ),
-
-      // Notificar contatos secundários após 3 minutos
       this.alertsQueue.add(
         'notifySecondaryContacts',
         {
@@ -367,23 +356,17 @@ export class FallAlertsService {
         },
         { delay: 180000 }
       ),
-
-      // Auto-confirmar após 5 minutos
       this.alertsQueue.add(
         'autoConfirm',
         { alertId: alert.id },
         { delay: 300000 }
       )
-    ]).catch(err => console.error('Erro ao agendar jobs:', err));
+    ]).catch(err => this.logger.error('Erro ao agendar jobs:', err));
 
-    console.log(`✅ Alerta ${alert.id} criado! WebSocket emitido + Jobs agendados.`);
+    this.logger.log(`✅ Alerta ${alert.id} criado! WebSocket emitido + Jobs agendados.`);
 
     return payload;
   }
-
-  /**
-   * Verificar se usuario pode responder alerta
-   */
 
   private async canUserRespondAlert(userId: string, patientId: string): Promise<boolean> {
     const user = await this.prismaService.user.findUnique({
@@ -415,8 +398,8 @@ export class FallAlertsService {
 
   /**
    * Marcar alerta como FALSO ALARME
+   * REFATORADO: Agora envia push notifications de aviso
    */
-
   async markFalseAlarm(alertId: string, caregiverId: string) {
     try {
       const alert = await this.prismaService.fallAlert.findUnique({
@@ -452,29 +435,59 @@ export class FallAlertsService {
         },
       });
 
-      console.log(`Alerta ${alertId} marcado como FALSE_ALARM por ${caregiver.name}`);
+      this.logger.log(`Alerta ${alertId} marcado como FALSE_ALARM por ${caregiver.name}`);
 
+      // Notificar via PUSH que foi alarme falso
+      this.sendPushNotificationsToRelatedUsers(
+        alert.patientId,
+        alert.patient.name,
+        alertId,
+        'Falso Alarme Informado',
+        `O alerta de ${alert.patient.name} foi cancelado por ${caregiver.name}. Está tudo bem.`,
+        'false_alarm',
+        alert.latitude,
+        alert.longitude
+      ).catch(err => this.logger.error('Erro ao enviar push de falso alarme:', err));
+
+      // WhatsApp Notifications (Lógica existente)
       try {
         const allContacts = await this.prismaService.emergencyContact.findMany({
           where: { patientId: alert.patientId },
+          orderBy: { priority: 'asc' }
         });
 
         for (const contact of allContacts) {
           try {
+
+            if (contact.priority === 1) {
+              this.logger.log(`Contato prioridade 1 (${contact.name}) – NÃO receberá aviso de falso alarme.`);
+              continue;
+            }
+
+            const alertTime = alert.createdAt.toLocaleString('pt-BR');
+
+            const msg =
+              `Se você está recebendo esta mensagem, é porque ` +
+              `${alert.patient.name} teve um alerta de possível queda às ${alertTime}, ` +
+              `mas já recebeu atendimento.
+\n` +
+              `Para saber mais informações, entre em contato com ${caregiver.name}.\n` +
+              `Fique tranquilo(a).`;
+
             await this.messagingService.sendFalseAlarm(
               contact.phone,
-              alert.patient.name,
-              caregiver.name
+              msg
             );
-            console.log(`WhatsApp enviado para ${contact.name}`);
+            this.logger.log(`WhatsApp enviado para ${contact.name}`);
           } catch (whatsappError) {
-            console.error(`Erro ao enviar WhatsApp para ${contact.name}:`, whatsappError.message);
+            this.logger.error(`Erro ao enviar WhatsApp para ${contact.name}:`, whatsappError.message);
           }
         }
       } catch (notifyError) {
-        console.error('Erro ao notificar cuidadores:', notifyError.message);
+        this.logger.error('Erro ao notificar cuidadores:', notifyError.message);
       }
 
+      // WebSocket
       try {
         this.gateway.emitAlertStatusChange({
           id: updated.id,
@@ -482,26 +495,24 @@ export class FallAlertsService {
           status: updated.status,
           respondedBy: caregiverId,
         });
-        console.log(`WebSocket emitido para alerta ${alertId}`);
       } catch (wsError) {
-        console.error('Erro ao emitir WebSocket:', wsError.message);
+        this.logger.error('Erro ao emitir WebSocket:', wsError.message);
       }
 
+      // Cancelar Jobs
       try {
         const jobs = await this.alertsQueue.getJobs(['delayed']);
         let canceledCount = 0;
 
         for (const job of jobs) {
           if (job.data.alertId === alertId) {
-            console.log(`Cancelando job ${job.id} (${job.name})`);
             await job.remove();
             canceledCount++;
           }
         }
-
-        console.log(`${canceledCount} jobs cancelados`);
+        this.logger.log(`${canceledCount} jobs cancelados`);
       } catch (queueError) {
-        console.error('Erro ao cancelar jobs:', queueError.message);
+        this.logger.error('Erro ao cancelar jobs:', queueError.message);
       }
 
       return {
@@ -510,31 +521,16 @@ export class FallAlertsService {
         status: updated.status
       };
     } catch (error) {
-      console.error('Erro em markFalseAlarm:', error);
-
+      this.logger.error('Erro em markFalseAlarm:', error);
       if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
         throw error;
       }
-
       throw new InternalServerErrorException('Erro ao marcar alerta como falso alarme');
     }
   }
 
   /**
-   * Marcar alerta como VERIFICANDO
-   */
-
-  /**
   * Marcar alerta como VERIFICANDO
-  *
-  * Comportamento corrigido:
-  * - `caregiverId` é tratado como ID do USUÁRIO (cuidador OU familiar).
-  * - Atualiza o alerta para VERIFYING e seta respondedBy = caregiverId.
-  * - Emite evento WebSocket para a sala do paciente.
-  * - Cancela jobs de notifySecondaryContacts agendados.
-  * - Agenda job 'requestConfirmation' passando caregiverId (userId) para que o processador envie a confirmação ao próprio respondente.
-  * - Envia o lembrete (WhatsApp COM BOTÕES) para o TELEFONE do usuário que respondeu.
-  *   - Se o usuário não tiver telefone cadastrado, faz fallback para o contato de emergência prioritário do paciente.
   */
   async markVerifying(alertId: string, caregiverId: string) {
     try {
@@ -554,7 +550,6 @@ export class FallAlertsService {
         throw new ForbiddenException('Voce nao tem permissao para responder este alerta');
       }
 
-      // Buscar o usuário (cuidador OU familiar) que está respondendo
       const respondingUser = await this.prismaService.user.findUnique({
         where: { id: caregiverId },
         select: { id: true, name: true, phone: true, role: true },
@@ -571,9 +566,8 @@ export class FallAlertsService {
         },
       });
 
-      console.log(`Alerta ${alertId} marcado como VERIFYING por ${respondingUser?.name ?? caregiverId}`);
+      this.logger.log(`Alerta ${alertId} marcado como VERIFYING por ${respondingUser?.name ?? caregiverId}`);
 
-      // Emitir atualização via WebSocket
       try {
         this.gateway.emitAlertStatusChange({
           id: updated.id,
@@ -583,41 +577,35 @@ export class FallAlertsService {
           verificationDeadline,
         });
       } catch (wsError) {
-        console.error('Erro ao emitir WebSocket:', wsError.message);
+        this.logger.error('Erro ao emitir WebSocket:', wsError.message);
       }
 
-      // Cancelar jobs notifySecondaryContacts relacionados a este alerta (se existirem)
       try {
         const jobs = await this.alertsQueue.getJobs(['delayed']);
         for (const job of jobs) {
           if (job.data.alertId === alertId && job.name === 'notifySecondaryContacts') {
             await job.remove();
-            console.log(`Job notifySecondaryContacts cancelado`);
+            this.logger.log(`Job notifySecondaryContacts cancelado`);
           }
         }
       } catch (queueError) {
-        console.error('Erro ao cancelar jobs:', queueError.message);
+        this.logger.error('Erro ao cancelar jobs:', queueError.message);
       }
 
-      // Agendar job requestConfirmation passando caregiverId (userId) para que a fila saiba
       try {
         await this.alertsQueue.add(
           'requestConfirmation',
           { alertId: alert.id, caregiverId },
-          { delay: 10000 }, // 10s
+          { delay: 10000 },
         );
-        console.log(`Job requestConfirmation agendado para 10s`);
       } catch (queueError) {
-        console.error('Erro ao agendar job:', queueError.message);
+        this.logger.error('Erro ao agendar job:', queueError.message);
       }
 
-      // Preparar link de localização
       const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
 
-      // Enviar lembrete COM BOTÕES preferencialmente para o telefone do usuário que respondeu
       try {
         if (respondingUser?.phone) {
-          console.log(`[markVerifying] Enviando lembrete para o usuário respondente: ${respondingUser.name} (${respondingUser.phone})`);
           await this.messagingService.sendVerificationReminderWithButtons({
             to: respondingUser.phone,
             alertId: alert.id,
@@ -625,15 +613,12 @@ export class FallAlertsService {
             location: googleMapsLink,
             contactName: respondingUser.name,
           });
-          console.log(`[markVerifying] WhatsApp com BOTÕES enviado para ${respondingUser.name}`);
         } else {
-          // Fallback: usar contato de emergência prioritário
           const priorityContact = await this.prismaService.emergencyContact.findFirst({
             where: { patientId: alert.patientId, priority: 1 },
           });
 
           if (priorityContact) {
-            console.log(`[markVerifying] Usuario sem telefone. Usando contato prioritário: ${priorityContact.name} (${priorityContact.phone})`);
             await this.messagingService.sendVerificationReminderWithButtons({
               to: priorityContact.phone,
               alertId: alert.id,
@@ -641,30 +626,25 @@ export class FallAlertsService {
               location: googleMapsLink,
               contactName: priorityContact.name,
             });
-            console.log(`[markVerifying] WhatsApp com BOTÕES enviado para contato prioritário ${priorityContact.name}`);
-          } else {
-            console.log('[markVerifying] Nenhum telefone disponível para notificação (respondente sem telefone e sem contato prioritário).');
           }
         }
       } catch (notifyError) {
-        console.error('Erro ao enviar lembrete/verificacao:', notifyError.message);
+        this.logger.error('Erro ao enviar lembrete/verificacao:', notifyError.message);
       }
 
       return updated;
     } catch (error) {
-      console.error('Erro em markVerifying:', error);
-
+      this.logger.error('Erro em markVerifying:', error);
       if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
         throw error;
       }
-
       throw new InternalServerErrorException('Erro ao marcar alerta como verificando');
     }
   }
+
   /**
    * Confirmar emergencia apos verificacao
    */
-
   async confirmAfterVerification(alertId: string, caregiverId: string) {
     try {
       const alert = await this.prismaService.fallAlert.findUnique({
@@ -682,13 +662,8 @@ export class FallAlertsService {
         throw new ForbiddenException('Voce nao tem permissao para responder este alerta');
       }
 
-      const caregiver = await this.prismaService.user.findUnique({
-        where: { id: caregiverId },
-      });
-
       try {
         const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
-
         const allContacts = await this.prismaService.emergencyContact.findMany({
           where: { patientId: alert.patientId },
         });
@@ -702,23 +677,20 @@ export class FallAlertsService {
               contact.name,
               contact.priority
             );
-            console.log(`WhatsApp de emergencia confirmada enviado para ${contact.name}`);
           } catch (whatsappError) {
-            console.error(`Erro ao enviar WhatsApp:`, whatsappError.message);
+            this.logger.error(`Erro ao enviar WhatsApp:`, whatsappError.message);
           }
         }
       } catch (notifyError) {
-        console.error('Erro ao notificar:', notifyError.message);
+        this.logger.error('Erro ao notificar:', notifyError.message);
       }
 
       return this.confirmAlert(alertId);
     } catch (error) {
-      console.error('Erro em confirmAfterVerification:', error);
-
+      this.logger.error('Erro em confirmAfterVerification:', error);
       if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
         throw error;
       }
-
       throw new InternalServerErrorException('Erro ao confirmar alerta apos verificacao');
     }
   }
@@ -726,7 +698,6 @@ export class FallAlertsService {
   /**
    * Confirmar alerta (auto ou manual)
    */
-
   async confirmAlert(alertId: string) {
     const alert = await this.prismaService.fallAlert.findUnique({
       where: { id: alertId },
@@ -747,11 +718,7 @@ export class FallAlertsService {
       throw new BadRequestException('Nenhum contato de emergencia encontrado.');
     }
 
-    console.log(`\n========================================`);
-    console.log(`ALERTA CONFIRMADO: ${alertId}`);
-    console.log(`Paciente: ${alert.patient.name}`);
-    console.log(`Notificando ${contatos.length} contatos...`);
-    console.log(`========================================\n`);
+    this.logger.log(`\n=== ALERTA CONFIRMADO: ${alertId} ===`);
 
     for (const contact of contatos) {
       try {
@@ -762,9 +729,8 @@ export class FallAlertsService {
           contact.name,
           contact.priority
         );
-        console.log(`WhatsApp enviado para ${contact.name} (prioridade ${contact.priority})`);
       } catch (err) {
-        console.error(`Erro ao enviar WhatsApp para ${contact.name}:`, err.message);
+        this.logger.error(`Erro ao enviar WhatsApp para ${contact.name}:`, err.message);
       }
     }
 
@@ -781,17 +747,13 @@ export class FallAlertsService {
 
     this.gateway.emitConfirmed(payload);
 
-    console.log(`Alerta ${alertId} confirmado e notificacoes enviadas!\n`);
-
     return payload;
   }
 
   /**
    * Listar alertas de um paciente
    */
-
   async getAlertsByPatient(patientId: string, page: number, perPage: number) {
-
     const alerts = await this.prismaService.fallAlert.findMany({
       where: { patientId },
       take: perPage,
@@ -804,6 +766,5 @@ export class FallAlertsService {
     })
 
     return { alerts, count };
-
   }
 }
