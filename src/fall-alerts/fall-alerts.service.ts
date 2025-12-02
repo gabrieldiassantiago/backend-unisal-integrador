@@ -464,7 +464,11 @@ export class FallAlertsService {
               continue;
             }
 
-            const alertTime = alert.createdAt.toLocaleString('pt-BR');
+            const buscarTempoAlerta = await this.prismaService.fallAlert.findUnique({
+              where: { id: alertId },
+            });
+
+            const alertTime = buscarTempoAlerta.createdAt.toLocaleString('pt-BR');
 
             const msg =
               `Se você está recebendo esta mensagem, é porque ` +
