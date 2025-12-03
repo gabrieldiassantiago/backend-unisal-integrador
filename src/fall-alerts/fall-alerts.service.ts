@@ -409,9 +409,10 @@ export class FallAlertsService {
 
       if (!alert) throw new alertNoExisting(alertId);
 
-      if (alert.status !== 'PENDING' && alert.status !== 'VERIFYING') {
-        throw new BadRequestException('Alerta ja foi processado');
+      if (['FALSE_ALARM', 'CONFIRMED', 'RESOLVED'].includes(alert.status)) {
+        throw new BadRequestException('Este alerta já foi encerrado');
       }
+
 
       const canRespond = await this.canUserRespondAlert(caregiverId, alert.patientId);
       if (!canRespond) {
@@ -553,6 +554,14 @@ export class FallAlertsService {
 
       if (!alert) throw new alertNoExisting(alertId);
 
+      if (['FALSE_ALARM', 'CONFIRMED', 'RESOLVED'].includes(alert.status)) {
+        throw new BadRequestException('Este alerta já foi encerrado e não pode ser alterado');
+      }
+
+      if (alert.status === 'VERIFYING' && alert.respondedBy && alert.respondedBy !== caregiverId) {
+        throw new ForbiddenException('Outra pessoa já está verificando este alerta');
+      }
+
       if (alert.status !== 'PENDING') {
         throw new BadRequestException('Alerta ja foi processado');
       }
@@ -592,17 +601,20 @@ export class FallAlertsService {
         this.logger.error('Erro ao emitir WebSocket:', wsError.message);
       }
 
+      // Cancelar TODOS os jobs relacionados ao alerta
       try {
-        const jobs = await this.alertsQueue.getJobs(['delayed']);
+        const jobs = await this.alertsQueue.getJobs(['delayed', 'waiting', 'active']);
+
         for (const job of jobs) {
-          if (job.data.alertId === alertId && job.name === 'notifySecondaryContacts') {
+          if (job.data?.alertId === alertId) {
             await job.remove();
-            this.logger.log(`Job notifySecondaryContacts cancelado`);
+            this.logger.log(`🛑 Job ${job.name} cancelado`);
           }
         }
-      } catch (queueError) {
-        this.logger.error('Erro ao cancelar jobs:', queueError.message);
+      } catch (err) {
+        this.logger.error('Erro ao cancelar jobs:', err.message);
       }
+
 
       try {
         await this.alertsQueue.add(
@@ -665,6 +677,11 @@ export class FallAlertsService {
       });
 
       if (!alert) throw new alertNoExisting(alertId);
+
+      if (['FALSE_ALARM', 'CONFIRMED', 'RESOLVED'].includes(alert.status)) {
+        throw new BadRequestException('Este alerta já foi encerrado');
+      }
+
       if (alert.status !== 'VERIFYING') {
         throw new BadRequestException('Alerta nao esta em verificacao');
       }
@@ -717,6 +734,11 @@ export class FallAlertsService {
     });
 
     if (!alert) throw new alertNoExisting(alertId);
+
+    if (['FALSE_ALARM', 'CONFIRMED', 'RESOLVED'].includes(alert.status)) {
+      throw new BadRequestException('Este alerta já está finalizado');
+    }
+
 
     const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
 
