@@ -678,7 +678,6 @@ export class FamilyService {
     familyMemberId: string,
     patientId: string,
   ) {
-    // 1. Validar que o solicitante é cuidador principal
     const caregiverRelation = await this.prisma.caregiverPatient.findUnique({
       where: {
         caregiverId_patientId: {
@@ -694,91 +693,54 @@ export class FamilyService {
       );
     }
 
-    // 2. Encontrar relação familiar ativa ou pendente
-    const relation = await this.prisma.familyRelation.findFirst({
-      where: {
-        primaryCaregiverId,
-        familyMemberId,
-        patientId,
-      },
-      include: {
-        familyMember: true,
-        permissions: true,
-      },
-    });
-
-    if (!relation) {
-      throw new NotFoundException('Este familiar não existe para este paciente');
-    }
-
-    // 3. Garantir que o usuário é realmente FAMILY_MEMBER
-    if (relation.familyMember.role !== 'FAMILY_MEMBER') {
-      throw new ConflictException(
-        'Este usuário não é um familiar e não pode ser removido',
-      );
-    }
-
-    // 4. Verificar se ele não possui relação com outros pacientes
-    const otherRelations = await this.prisma.familyRelation.count({
-      where: {
-        familyMemberId,
-        patientId: { not: patientId },
-        revokedAt: null,
-      },
-    });
-
-    if (otherRelations > 0) {
-      throw new ConflictException(
-        'Este familiar possui acesso a outros pacientes e não pode ser removido totalmente',
-      );
-    }
-
-    // 5. Executar remoção total em transação
     return this.prisma.$transaction(async (tx) => {
-      // 🗑 Remover permissões
-      if (relation.permissions) {
-        await tx.familyPermissions.delete({
-          where: { relationId: relation.id },
-        });
-      }
 
-      // 🗑 Remover relação familiar
-      await tx.familyRelation.delete({
-        where: { id: relation.id },
+      await tx.familyPermissions.deleteMany({
+        where: {
+          relation: {
+            OR: [
+              { primaryCaregiverId: familyMemberId },
+              { familyMemberId: familyMemberId },
+              { patientId: familyMemberId }
+            ]
+          }
+        }
       });
 
-      // 🗑 Remover push tokens (expo notifications)
-      await tx.pushToken.deleteMany({
-        where: { userId: familyMemberId },
+      await tx.familyRelation.deleteMany({
+        where: {
+          OR: [
+            { primaryCaregiverId: familyMemberId },
+            { familyMemberId: familyMemberId },
+            { patientId: familyMemberId }
+          ]
+        }
       });
 
-      // 🗑 Remover refresh tokens (sessions)
-      await tx.refreshToken.deleteMany({
-        where: { userId: familyMemberId },
-      });
+      await tx.pushToken.deleteMany({ where: { userId: familyMemberId } });
 
-      // 🗑 Remover códigos emitidos ou usados
+      await tx.refreshToken.deleteMany({ where: { userId: familyMemberId } });
+
       await tx.accessCode.deleteMany({
         where: {
-          OR: [{ caregiverId: familyMemberId }, { patientId: familyMemberId }],
-        },
+          OR: [{ caregiverId: familyMemberId }, { patientId: familyMemberId }]
+        }
       });
 
-      // 🧨 Finalmente deletar usuário
-      const deletedUser = await tx.user.delete({
+      const deleted = await tx.user.delete({
         where: { id: familyMemberId },
       });
 
       return {
         message: 'Familiar removido permanentemente',
         removedUser: {
-          id: deletedUser.id,
-          name: deletedUser.name,
-          email: deletedUser.email,
+          id: deleted.id,
+          name: deleted.name,
+          email: deleted.email,
         },
-        patientId,
       };
     });
   }
+
 
 }
