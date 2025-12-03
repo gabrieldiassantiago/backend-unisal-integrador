@@ -17,7 +17,7 @@ import { UpdateFamilyPermissionsDto } from './dtos/update-family-permissions.dto
 
 @Controller('family')
 export class FamilyController {
-  constructor(private readonly familyService: FamilyService) {}
+  constructor(private readonly familyService: FamilyService) { }
 
   // Cuidador principal convida familiar
   @Post('invite')
@@ -93,4 +93,19 @@ export class FamilyController {
   ) {
     return this.familyService.getFullFamilyInfo(patientId, userId);
   }
+
+  @Delete('patients/:patientId/members/:familyMemberId/permanent')
+  @UseGuards(JwtAuthGuard)
+  async deleteFamilyMemberCompletely(
+    @CurrentUserId() caregiverId: string,
+    @Param('patientId') patientId: string,
+    @Param('familyMemberId') familyMemberId: string,
+  ) {
+    return this.familyService.deleteFamilyMemberCompletely(
+      caregiverId,
+      familyMemberId,
+      patientId,
+    );
+  }
+
 }
