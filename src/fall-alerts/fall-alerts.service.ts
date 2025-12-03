@@ -61,7 +61,9 @@ export class FallAlertsService {
       let targetName = 'Cuidador';
 
       if (alert.respondedBy) {
-        const user = await this.prismaService.user.findUnique({ where: { id: alert.respondedBy } });
+        const user = await this.prismaService.user.findUnique({
+          where: { id: alert.respondedBy },
+        });
         if (user?.phone) {
           targetPhone = user.phone;
           targetName = user.name;
@@ -88,7 +90,9 @@ export class FallAlertsService {
             contactName: targetName,
           });
         } catch (e: any) {
-          this.logger.error(`Erro ao notificar resolução alerta ${alert.id}: ${e.message}`);
+          this.logger.error(
+            `Erro ao notificar resolução alerta ${alert.id}: ${e.message}`,
+          );
         }
       }
     }
@@ -130,7 +134,9 @@ export class FallAlertsService {
       'resolved',
       alert.latitude,
       alert.longitude,
-    ).catch((err) => this.logger.error('Erro ao enviar push de resolvido:', err));
+    ).catch((err) =>
+      this.logger.error('Erro ao enviar push de resolvido:', err),
+    );
 
     return updated;
   }
@@ -165,7 +171,8 @@ export class FallAlertsService {
 
       for (const chunk of chunks) {
         try {
-          const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
+          const ticketChunk =
+            await this.expo.sendPushNotificationsAsync(chunk);
           this.logger.log('Push notifications enviadas:', ticketChunk);
 
           ticketChunk.forEach((ticket, index) => {
@@ -199,44 +206,50 @@ export class FallAlertsService {
       this.logger.log(`\n=== ENVIANDO PUSH (${type}) ===`);
       this.logger.log(`Paciente: ${patientName} | Alerta: ${alertId}`);
 
-      const caregiverRelations = await this.prismaService.caregiverPatient.findMany({
-        where: { patientId },
-        include: {
-          caregiver: {
-            select: {
-              id: true,
-              name: true,
-              pushTokens: { select: { token: true } },
+      const caregiverRelations =
+        await this.prismaService.caregiverPatient.findMany({
+          where: { patientId },
+          include: {
+            caregiver: {
+              select: {
+                id: true,
+                name: true,
+                pushTokens: { select: { token: true } },
+              },
             },
           },
-        },
-      });
+        });
 
-      const familyRelations = await this.prismaService.familyRelation.findMany({
-        where: {
-          patientId,
-          acceptedAt: { not: null },
-          revokedAt: null,
-        },
-        include: {
-          familyMember: {
-            select: {
-              id: true,
-              name: true,
-              pushTokens: { select: { token: true } },
+      const familyRelations =
+        await this.prismaService.familyRelation.findMany({
+          where: {
+            patientId,
+            acceptedAt: { not: null },
+            revokedAt: null,
+          },
+          include: {
+            familyMember: {
+              select: {
+                id: true,
+                name: true,
+                pushTokens: { select: { token: true } },
+              },
             },
           },
-        },
-      });
+        });
 
       const tokens: string[] = [];
 
       caregiverRelations.forEach((relation) => {
-        relation.caregiver.pushTokens.forEach((pushToken) => tokens.push(pushToken.token));
+        relation.caregiver.pushTokens.forEach((pushToken) =>
+          tokens.push(pushToken.token),
+        );
       });
 
       familyRelations.forEach((relation) => {
-        relation.familyMember.pushTokens.forEach((pushToken) => tokens.push(pushToken.token));
+        relation.familyMember.pushTokens.forEach((pushToken) =>
+          tokens.push(pushToken.token),
+        );
       });
 
       if (tokens.length === 0) {
@@ -348,20 +361,24 @@ export class FallAlertsService {
         },
         { delay: 180000 },
       ),
-      this.alertsQueue.add('autoConfirm', { alertId: alert.id }, { delay: 300000 }),
+      this.alertsQueue.add(
+        'autoConfirm',
+        { alertId: alert.id },
+        { delay: 300000 },
+      ),
     ]).catch((err) => this.logger.error('Erro ao agendar jobs:', err));
 
-    this.logger.log(`✅ Alerta ${alert.id} criado! WebSocket emitido + Jobs agendados.`);
+    this.logger.log(
+      `✅ Alerta ${alert.id} criado! WebSocket emitido + Jobs agendados.`,
+    );
 
     return payload;
   }
 
-  /**
-   * ⚠️ ATENÇÃO:
-   * Este helper continua existindo para USO FUTURO (APP),
-   * mas NÃO é mais usado nas ações disparadas pelo WhatsApp.
-   */
-  private async canUserRespondAlert(userId: string, patientId: string): Promise<boolean> {
+  private async canUserRespondAlert(
+    userId: string,
+    patientId: string,
+  ): Promise<boolean> {
     const user = await this.prismaService.user.findUnique({
       where: { id: userId },
       select: { role: true },
@@ -370,19 +387,23 @@ export class FallAlertsService {
     if (!user) return false;
 
     if (user.role === 'CAREGIVER') {
-      const caregiverPatient = await this.prismaService.caregiverPatient.findUnique({
-        where: {
-          caregiverId_patientId: {
-            caregiverId: userId,
-            patientId: patientId,
+      const caregiverPatient =
+        await this.prismaService.caregiverPatient.findUnique({
+          where: {
+            caregiverId_patientId: {
+              caregiverId: userId,
+              patientId: patientId,
+            },
           },
-        },
-      });
+        });
       return !!caregiverPatient;
     }
 
     if (user.role === 'FAMILY_MEMBER') {
-      const permissions = await this.familyService.getFamilyPermissions(userId, patientId);
+      const permissions = await this.familyService.getFamilyPermissions(
+        userId,
+        patientId,
+      );
       return permissions?.canRespondAlerts ?? false;
     }
 
@@ -391,11 +412,14 @@ export class FallAlertsService {
 
   /**
    * Marcar alerta como FALSO ALARME
-   * Agora: usado tanto por APP quanto por WhatsApp
-   * - NÃO exige mais permissão de cuidador/familiar
-   * - Só bloqueia se o alerta já estiver encerrado
+   * - App: usa caregiverId, respondedBy, permissões
+   * - WhatsApp: fromWhatsApp = true → NÃO usa respondedBy
    */
-  async markFalseAlarm(alertId: string, caregiverId: string) {
+  async markFalseAlarm(
+    alertId: string,
+    caregiverId?: string | null,
+    fromWhatsApp = false,
+  ) {
     try {
       const alert = await this.prismaService.fallAlert.findUnique({
         where: { id: alertId },
@@ -408,24 +432,50 @@ export class FallAlertsService {
         throw new BadRequestException('Este alerta já foi encerrado');
       }
 
-      // 🔓 PERMISSÃO LIBERADA PARA WHATSAPP
-      // (se quiser reativar permissão forte, reusar canUserRespondAlert aqui)
+      let caregiver: { name: string } | null = null;
 
-      const caregiver = await this.prismaService.user.findUnique({
-        where: { id: caregiverId },
-      });
+      if (!fromWhatsApp) {
+        if (!caregiverId) {
+          throw new BadRequestException('CaregiverId é obrigatório');
+        }
+
+        const canRespond = await this.canUserRespondAlert(
+          caregiverId,
+          alert.patientId,
+        );
+        if (!canRespond) {
+          throw new ForbiddenException(
+            'Voce nao tem permissao para responder este alerta',
+          );
+        }
+
+        caregiver = await this.prismaService.user.findUnique({
+          where: { id: caregiverId },
+        });
+
+        if (!caregiver) {
+          throw new BadRequestException(`Usuario nao encontrado: ${caregiverId}`);
+        }
+      }
+
+      const caregiverName = caregiver?.name ?? 'um responsável';
+
+      const dataUpdate: any = {
+        status: 'FALSE_ALARM',
+        respondedAt: new Date(),
+      };
+
+      if (!fromWhatsApp && caregiverId) {
+        dataUpdate.respondedBy = caregiverId;
+      }
 
       const updated = await this.prismaService.fallAlert.update({
         where: { id: alertId },
-        data: {
-          status: 'FALSE_ALARM',
-          respondedBy: caregiverId,
-          respondedAt: new Date(),
-        },
+        data: dataUpdate,
       });
 
       this.logger.log(
-        `Alerta ${alertId} marcado como FALSE_ALARM por ${caregiver?.name ?? caregiverId}`,
+        `Alerta ${alertId} marcado como FALSE_ALARM por ${caregiverName}`,
       );
 
       this.sendPushNotificationsToRelatedUsers(
@@ -433,12 +483,13 @@ export class FallAlertsService {
         alert.patient.name,
         alertId,
         'Falso Alarme Informado',
-        `O alerta de ${alert.patient.name} foi cancelado por ${caregiver?.name ?? 'um contato'
-        }. Está tudo bem.`,
+        `O alerta de ${alert.patient.name} foi cancelado por ${caregiverName}. Está tudo bem.`,
         'false_alarm',
         alert.latitude,
         alert.longitude,
-      ).catch((err) => this.logger.error('Erro ao enviar push de falso alarme:', err));
+      ).catch((err) =>
+        this.logger.error('Erro ao enviar push de falso alarme:', err),
+      );
 
       try {
         const allContacts = await this.prismaService.emergencyContact.findMany({
@@ -462,20 +513,24 @@ export class FallAlertsService {
               }
             }
 
-            const buscarTempoAlerta = await this.prismaService.fallAlert.findUnique({
-              where: { id: alertId },
-            });
+            const buscarTempoAlerta =
+              await this.prismaService.fallAlert.findUnique({
+                where: { id: alertId },
+              });
 
-            const alertTime = buscarTempoAlerta!.createdAt.toLocaleString('pt-BR', {
-              timeZone: 'America/Sao_Paulo',
-            });
+            const alertTime = buscarTempoAlerta.createdAt.toLocaleString(
+              'pt-BR',
+              {
+                timeZone: 'America/Sao_Paulo',
+              },
+            );
 
             const msg =
               `Se você está recebendo esta mensagem, é porque ` +
               `${alert.patient.name} teve um alerta de possível queda às ${alertTime}, ` +
-              `mas já recebeu atendimento.\n\n` +
-              `Para saber mais informações, entre em contato com ${caregiver?.name ?? 'o responsável'
-              }.\n` +
+              `mas já recebeu atendimento.
+\n` +
+              `Para saber mais informações, entre em contato com ${caregiverName}.\n` +
               `Fique tranquilo(a).`;
 
             await this.messagingService.sendFalseAlarm(contact.phone, msg);
@@ -488,16 +543,22 @@ export class FallAlertsService {
           }
         }
       } catch (notifyError: any) {
-        this.logger.error('Erro ao notificar cuidadores:', notifyError.message);
+        this.logger.error(
+          'Erro ao notificar cuidadores:',
+          notifyError.message,
+        );
       }
 
       try {
-        this.gateway.emitAlertStatusChange({
+        const wsPayload: any = {
           id: updated.id,
           patientId: updated.patientId,
           status: updated.status,
-          respondedBy: caregiverId,
-        });
+        };
+        if (!fromWhatsApp && caregiverId) {
+          wsPayload.respondedBy = caregiverId;
+        }
+        this.gateway.emitAlertStatusChange(wsPayload);
       } catch (wsError: any) {
         this.logger.error('Erro ao emitir WebSocket:', wsError.message);
       }
@@ -519,10 +580,10 @@ export class FallAlertsService {
 
       return {
         id: updated.id,
-        caregiverId: caregiverId,
+        caregiverId: fromWhatsApp ? null : caregiverId,
         status: updated.status,
       };
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Erro em markFalseAlarm:', error);
       if (
         error instanceof NotFoundException ||
@@ -531,17 +592,22 @@ export class FallAlertsService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException('Erro ao marcar alerta como falso alarme');
+      throw new InternalServerErrorException(
+        'Erro ao marcar alerta como falso alarme',
+      );
     }
   }
 
   /**
    * Marcar alerta como VERIFICANDO
-   * - Só pode sair de PENDING -> VERIFYING
-   * - Se já tem alguém verificando (respondedBy != caregiverId), bloqueia
-   * - NÃO exige permissão de cuidador/familiar (liberado p/ WhatsApp)
+   * - App: usa caregiverId, respondedBy, permissões
+   * - WhatsApp: fromWhatsApp = true → não usa respondedBy, nem reminder direto pro usuário
    */
-  async markVerifying(alertId: string, caregiverId: string) {
+  async markVerifying(
+    alertId: string,
+    caregiverId?: string | null,
+    fromWhatsApp = false,
+  ) {
     try {
       const alert = await this.prismaService.fallAlert.findUnique({
         where: { id: alertId },
@@ -551,56 +617,95 @@ export class FallAlertsService {
       if (!alert) throw new alertNoExisting(alertId);
 
       if (['FALSE_ALARM', 'CONFIRMED', 'RESOLVED'].includes(alert.status)) {
-        throw new BadRequestException('Este alerta já foi encerrado e não pode ser alterado');
+        throw new BadRequestException(
+          'Este alerta já foi encerrado e não pode ser alterado',
+        );
       }
 
-      if (alert.status === 'VERIFYING' && alert.respondedBy && alert.respondedBy !== caregiverId) {
-        throw new ForbiddenException('Outra pessoa já está verificando este alerta');
+      if (!fromWhatsApp) {
+        if (!caregiverId) {
+          throw new BadRequestException('CaregiverId é obrigatório');
+        }
+
+        if (
+          alert.status === 'VERIFYING' &&
+          alert.respondedBy &&
+          alert.respondedBy !== caregiverId
+        ) {
+          throw new ForbiddenException(
+            'Outra pessoa já está verificando este alerta',
+          );
+        }
+
+        if (alert.status !== 'PENDING') {
+          throw new BadRequestException('Alerta ja foi processado');
+        }
+
+        const canRespond = await this.canUserRespondAlert(
+          caregiverId,
+          alert.patientId,
+        );
+        if (!canRespond) {
+          throw new ForbiddenException(
+            'Voce nao tem permissao para responder este alerta',
+          );
+        }
+      } else {
+        // from WhatsApp: ainda exigimos que esteja PENDING
+        if (alert.status !== 'PENDING') {
+          throw new BadRequestException('Alerta ja foi processado');
+        }
       }
 
-      if (alert.status !== 'PENDING') {
-        throw new BadRequestException('Alerta ja foi processado');
-      }
-
-      // 🔓 PERMISSÃO LIBERADA PARA WHATSAPP
-
-      const respondingUser = await this.prismaService.user.findUnique({
-        where: { id: caregiverId },
-        select: { id: true, name: true, phone: true, role: true },
-      });
+      const respondingUser = !fromWhatsApp && caregiverId
+        ? await this.prismaService.user.findUnique({
+          where: { id: caregiverId },
+          select: { id: true, name: true, phone: true, role: true },
+        })
+        : null;
 
       const verificationDeadline = new Date(Date.now() + 120000); // 2 minutos
 
+      const dataUpdate: any = {
+        status: 'VERIFYING',
+        respondedAt: new Date(),
+        verificationDeadline,
+      };
+      if (!fromWhatsApp && caregiverId) {
+        dataUpdate.respondedBy = caregiverId;
+      }
+
       const updated = await this.prismaService.fallAlert.update({
         where: { id: alertId },
-        data: {
-          status: 'VERIFYING',
-          respondedBy: caregiverId,
-          respondedAt: new Date(),
-          verificationDeadline,
-        },
+        data: dataUpdate,
       });
 
       this.logger.log(
-        `Alerta ${alertId} marcado como VERIFYING por ${respondingUser?.name ?? caregiverId
+        `Alerta ${alertId} marcado como VERIFYING por ${respondingUser?.name ?? 'respondente'
         }`,
       );
 
       try {
-        this.gateway.emitAlertStatusChange({
+        const wsPayload: any = {
           id: updated.id,
           patientId: updated.patientId,
           status: updated.status,
-          respondedBy: caregiverId,
           verificationDeadline,
-        });
+        };
+        if (!fromWhatsApp && caregiverId) {
+          wsPayload.respondedBy = caregiverId;
+        }
+        this.gateway.emitAlertStatusChange(wsPayload);
       } catch (wsError: any) {
         this.logger.error('Erro ao emitir WebSocket:', wsError.message);
       }
 
-      // Cancelar TODOS os jobs relacionados ao alerta
       try {
-        const jobs = await this.alertsQueue.getJobs(['delayed', 'waiting', 'active']);
+        const jobs = await this.alertsQueue.getJobs([
+          'delayed',
+          'waiting',
+          'active',
+        ]);
 
         for (const job of jobs) {
           if (job.data?.alertId === alertId) {
@@ -612,51 +717,55 @@ export class FallAlertsService {
         this.logger.error('Erro ao cancelar jobs:', err.message);
       }
 
-      // Agenda job para pedir confirmação depois
-      try {
-        await this.alertsQueue.add(
-          'requestConfirmation',
-          { alertId: alert.id, caregiverId },
-          { delay: 10000 },
-        );
-      } catch (queueError: any) {
-        this.logger.error('Erro ao agendar job:', queueError.message);
-      }
+      // 🟢 SOMENTE APP: agendar requestConfirmation + enviar lembrete imediato
+      if (!fromWhatsApp && caregiverId) {
+        try {
+          await this.alertsQueue.add(
+            'requestConfirmation',
+            { alertId: alert.id, caregiverId },
+            { delay: 10000 },
+          );
+        } catch (queueError: any) {
+          this.logger.error('Erro ao agendar job:', queueError.message);
+        }
 
-      const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
+        const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
 
-      try {
-        if (respondingUser?.phone) {
-          // Cuidador / usuário com phone cadastrado
-          await this.messagingService.sendVerificationReminderWithButtons({
-            to: respondingUser.phone,
-            alertId: alert.id,
-            patientName: alert.patient.name,
-            location: googleMapsLink,
-            contactName: respondingUser.name,
-          });
-        } else {
-          // fallback: contato prioritário
-          const priorityContact = await this.prismaService.emergencyContact.findFirst({
-            where: { patientId: alert.patientId, priority: 1 },
-          });
-
-          if (priorityContact) {
+        try {
+          if (respondingUser?.phone) {
             await this.messagingService.sendVerificationReminderWithButtons({
-              to: priorityContact.phone,
+              to: respondingUser.phone,
               alertId: alert.id,
               patientName: alert.patient.name,
               location: googleMapsLink,
-              contactName: priorityContact.name,
+              contactName: respondingUser.name,
             });
+          } else {
+            const priorityContact =
+              await this.prismaService.emergencyContact.findFirst({
+                where: { patientId: alert.patientId, priority: 1 },
+              });
+
+            if (priorityContact) {
+              await this.messagingService.sendVerificationReminderWithButtons({
+                to: priorityContact.phone,
+                alertId: alert.id,
+                patientName: alert.patient.name,
+                location: googleMapsLink,
+                contactName: priorityContact.name,
+              });
+            }
           }
+        } catch (notifyError: any) {
+          this.logger.error(
+            'Erro ao enviar lembrete/verificacao:',
+            notifyError.message,
+          );
         }
-      } catch (notifyError: any) {
-        this.logger.error('Erro ao enviar lembrete/verificacao:', notifyError.message);
       }
 
       return updated;
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Erro em markVerifying:', error);
       if (
         error instanceof NotFoundException ||
@@ -665,16 +774,22 @@ export class FallAlertsService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException('Erro ao marcar alerta como verificando');
+      throw new InternalServerErrorException(
+        'Erro ao marcar alerta como verificando',
+      );
     }
   }
 
   /**
    * Confirmar emergencia apos verificacao
-   * - Só funciona se status = VERIFYING
-   * - NÃO exige permissão de cuidador/familiar (WhatsApp liberado)
+   * - App: valida caregiverId
+   * - WhatsApp: fromWhatsApp = true → não exige caregiverId
    */
-  async confirmAfterVerification(alertId: string, caregiverId: string) {
+  async confirmAfterVerification(
+    alertId: string,
+    caregiverId?: string | null,
+    fromWhatsApp = false,
+  ) {
     try {
       const alert = await this.prismaService.fallAlert.findUnique({
         where: { id: alertId },
@@ -691,7 +806,21 @@ export class FallAlertsService {
         throw new BadRequestException('Alerta nao esta em verificacao');
       }
 
-      // 🔓 PERMISSÃO LIBERADA PARA WHATSAPP
+      if (!fromWhatsApp) {
+        if (!caregiverId) {
+          throw new BadRequestException('CaregiverId é obrigatório');
+        }
+
+        const canRespond = await this.canUserRespondAlert(
+          caregiverId,
+          alert.patientId,
+        );
+        if (!canRespond) {
+          throw new ForbiddenException(
+            'Voce nao tem permissao para responder este alerta',
+          );
+        }
+      }
 
       try {
         const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
@@ -709,7 +838,10 @@ export class FallAlertsService {
               contact.priority,
             );
           } catch (whatsappError: any) {
-            this.logger.error(`Erro ao enviar WhatsApp:`, whatsappError.message);
+            this.logger.error(
+              `Erro ao enviar WhatsApp:`,
+              whatsappError.message,
+            );
           }
         }
       } catch (notifyError: any) {
@@ -717,7 +849,7 @@ export class FallAlertsService {
       }
 
       return this.confirmAlert(alertId);
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Erro em confirmAfterVerification:', error);
       if (
         error instanceof NotFoundException ||
@@ -726,7 +858,9 @@ export class FallAlertsService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException('Erro ao confirmar alerta apos verificacao');
+      throw new InternalServerErrorException(
+        'Erro ao confirmar alerta apos verificacao',
+      );
     }
   }
 
@@ -769,7 +903,10 @@ export class FallAlertsService {
           contact.priority,
         );
       } catch (err: any) {
-        this.logger.error(`Erro ao enviar WhatsApp para ${contact.name}:`, err.message);
+        this.logger.error(
+          `Erro ao enviar WhatsApp para ${contact.name}:`,
+          err.message,
+        );
       }
     }
 
