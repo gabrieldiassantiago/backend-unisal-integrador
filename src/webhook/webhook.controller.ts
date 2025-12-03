@@ -1,5 +1,5 @@
 /* ============================================================
-   WEBHOOK CONTROLLER COMPLETO — CORRIGIDO & OTIMIZADO
+   WEBHOOK CONTROLLER — VERSÃO CORRIGIDA E FUNCIONAL
    ============================================================ */
 
 import { Controller, Post, Body, Logger, Headers } from '@nestjs/common';
@@ -25,7 +25,6 @@ export class WebhookController {
   async handleEvolutionWebhook(@Body() payload: any, @Headers() headers: any) {
     this.logger.log('📥 WEBHOOK RECEBIDO DA EVOLUTION API');
     this.logger.log(`📦 Event: ${payload.event}`);
-    this.logger.log(`📊 Payload: ${JSON.stringify(payload, null, 2)}`);
 
     try {
       const { event, data } = payload;
@@ -38,8 +37,7 @@ export class WebhookController {
         return await this.handleMessageUpdate(data);
       }
 
-      return { status: 'ignored', event };
-
+      return { status: 'ignored' };
     } catch (error: any) {
       this.logger.error('❌ Erro webhook:', error.message);
       return { status: 'error', message: error.message };
@@ -52,15 +50,13 @@ export class WebhookController {
 
   private async handleMessageReceived(data: any) {
     try {
-      this.logger.log(`📨 Mensagem recebida`);
-
       const messages = Array.isArray(data) ? data : [data];
 
       for (const msg of messages) {
         const message = msg?.message;
         const key = msg?.key;
-        if (!message || !key) continue;
 
+        if (!message || !key) continue;
         if (key.fromMe) continue;
 
         const phone = key.remoteJid.replace('@s.whatsapp.net', '');
@@ -73,14 +69,16 @@ export class WebhookController {
           return this.handlePollVote(msg);
         }
 
-        const text = message.conversation || message?.extendedTextMessage?.text;
+        const text =
+          message?.conversation ||
+          message?.extendedTextMessage?.text;
+
         if (text && /^[123]$/.test(text.trim())) {
           return this.handleNumericResponse(phone, text.trim());
         }
       }
 
       return { status: 'ignored' };
-
     } catch (err) {
       this.logger.error('❌ Erro handleMessageReceived:', err.message);
       throw err;
@@ -94,12 +92,12 @@ export class WebhookController {
   private async handleMessageUpdate(data: any) {
     try {
       const message = data?.message;
+
       if (message?.pollUpdateMessage) {
         return await this.handlePollVote(data);
       }
 
       return { status: 'ignored' };
-
     } catch (err) {
       this.logger.error('❌ Erro handleMessageUpdate:', err.message);
       throw err;
@@ -112,17 +110,16 @@ export class WebhookController {
 
   private async handleButtonResponse(data: any) {
     try {
-      const button = data?.message?.buttonsResponseMessage;
+      const btn = data?.message?.buttonsResponseMessage;
       const phone = data?.key?.remoteJid.replace('@s.whatsapp.net', '');
-      const buttonId = button?.selectedButtonId;
 
-      if (!buttonId) return { status: 'ignored' };
+      const btnId = btn?.selectedButtonId;
+      if (!btnId) return { status: 'ignored' };
 
-      const parts = buttonId.split('_');
+      const parts = btnId.split('_');
       const action = parts.slice(0, -1).join('_');
 
       return this.processAction(phone, action);
-
     } catch (err) {
       this.logger.error('❌ Erro handleButtonResponse:', err.message);
       throw err;
@@ -151,7 +148,6 @@ export class WebhookController {
       if (!action) return { status: 'ignored' };
 
       return this.processAction(phone, action);
-
     } catch (err) {
       this.logger.error('❌ Erro handlePollVote:', err.message);
       throw err;
@@ -180,7 +176,7 @@ export class WebhookController {
         orderBy: { createdAt: 'desc' },
       });
 
-      if (!alert) return { status: 'error', reason: 'no_alert' };
+      if (!alert) return { status: 'error', reason: 'no_active_alert' };
 
       let action;
 
@@ -193,7 +189,6 @@ export class WebhookController {
       }
 
       return this.processAction(phone, action);
-
     } catch (err) {
       this.logger.error('❌ Erro numericResponse:', err.message);
       throw err;
@@ -201,82 +196,95 @@ export class WebhookController {
   }
 
   /* ============================================================
-     *** AQUI É O CÉREBRO DO SISTEMA ***
-     PROCESSA A AÇÃO DO WHATSAPP
+     CÉREBRO DO SISTEMA — PROCESSA AÇÃO
      ============================================================ */
 
   private async processAction(phone: string, action: string) {
     try {
       const clean = phone.replace(/\D/g, '');
 
-      /* =============================
-         1) BUSCAR O USUÁRIO QUE CLICOU
-         ============================= */
+      /* =====================================================
+         1) BUSCAR USER REAL E/OU CONTATO
+         ===================================================== */
+
       const user = await this.prismaService.user.findFirst({
-        where: { phone: { contains: clean.slice(-9) } }
+        where: { phone: { contains: clean.slice(-9) } },
       });
-
-      if (!user) return { status: 'error', reason: 'user_not_found' };
-      const userId = user.id;
-
-      /* =============================
-         2) BUSCAR CONTATO E ALERTA
-         ============================= */
 
       const contact = await this.prismaService.emergencyContact.findFirst({
         where: { phone: { contains: clean.slice(-9) } },
-        include: { patient: true }
+        include: { patient: true },
       });
 
+      if (!contact) {
+        return { status: 'error', reason: 'phone_not_registered_anywhere' };
+      }
+
+      /* =====================================================
+         2) DEFINIR IDENTIDADE DO RESPONSÁVEL
+            (pode ser user.id OU contact.id)
+         ===================================================== */
+
+      let responderId: string;
+
+      if (user) {
+        responderId = user.id; // cuidador ou familiar do app
+      } else {
+        responderId = contact.id; // contato apenas do WhatsApp
+      }
+
+      /* =====================================================
+         3) BUSCAR O ALERTA ATIVO
+         ===================================================== */
       const alert = await this.prismaService.fallAlert.findFirst({
         where: {
           patientId: contact.patientId,
           status: { in: ['PENDING', 'VERIFYING'] },
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
       });
 
-      if (!alert) return { status: 'error', reason: 'no_active_alert' };
-
-      /* =============================
-         3) BLOQUEIOS INTELIGENTES
-         ============================= */
-
-      // SE O ALERTA ESTÁ FECHADO → BLOQUEIA
-      if (['RESOLVED', 'FALSE_ALARM', 'CONFIRMED'].includes(alert.status)) {
-        return { status: 'blocked', reason: 'alert_closed' };
+      if (!alert) {
+        return { status: 'error', reason: 'no_active_alert' };
       }
 
-      // SE ALGUÉM ESTÁ VERIFICANDO → BLOQUEIA OUTROS
-      if (alert.status === 'VERIFYING' && alert.respondedBy !== userId) {
-        return { status: 'blocked', reason: 'another_user_is_verifying' };
+      /* =====================================================
+         4) BLOQUEIOS DE SEGURANÇA
+         ===================================================== */
+
+      if (['RESOLVED', 'CONFIRMED', 'FALSE_ALARM'].includes(alert.status)) {
+        return { status: 'blocked', reason: 'alert_already_closed' };
       }
 
-      /* =============================
-         4) PROCESSAR AÇÃO
-         ============================= */
+      if (alert.status === 'VERIFYING' && alert.respondedBy !== responderId) {
+        return { status: 'blocked', reason: 'another_user_verifying' };
+      }
+
+      /* =====================================================
+         5) EXECUTAR AÇÃO
+         ===================================================== */
 
       if (action === 'verify') {
-        await this.fallAlertsService.markVerifying(alert.id, userId);
-        return { status: 'success', action: 'verifying', alertId: alert.id };
+        await this.fallAlertsService.markVerifying(alert.id, responderId);
+        return { status: 'success', action: 'verify', alertId: alert.id };
       }
 
       if (action === 'false_alarm') {
-        await this.fallAlertsService.markFalseAlarm(alert.id, userId);
+        await this.fallAlertsService.markFalseAlarm(alert.id, responderId);
         return { status: 'success', action: 'false_alarm', alertId: alert.id };
       }
 
       if (action === 'confirm_emergency') {
         if (alert.status === 'VERIFYING') {
-          await this.fallAlertsService.confirmAfterVerification(alert.id, userId);
+          await this.fallAlertsService.confirmAfterVerification(alert.id, responderId);
         } else {
           await this.fallAlertsService.confirmAlert(alert.id);
         }
-        return { status: 'success', action: 'emergency_confirmed', alertId: alert.id };
+
+        return { status: 'success', action: 'confirm_emergency', alertId: alert.id };
       }
 
       return { status: 'ignored', reason: 'unknown_action' };
-
     } catch (err) {
       this.logger.error('❌ Erro processAction:', err.message);
       throw err;
