@@ -853,6 +853,18 @@ export class FallAlertsService {
             );
           }
         }
+
+        await this.sendPushNotificationsToRelatedUsers(
+      alert.patientId,
+      alert.patient.name,
+      alert.id,
+      'Emergência Confirmada',
+      `A situação de ${alert.patient.name} foi confirmada como emergência.`,
+      'emergency_confirmed',
+      alert.latitude,
+      alert.longitude,
+    );
+
       } catch (notifyError: any) {
         this.logger.error('Erro ao notificar:', notifyError.message);
       }
