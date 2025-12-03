@@ -857,6 +857,18 @@ export class FallAlertsService {
         this.logger.error('Erro ao notificar:', notifyError.message);
       }
 
+    await this.sendPushNotificationsToRelatedUsers(
+    alert.patientId,
+    alert.patient.name,
+    alert.id,
+    'Emergência Confirmada',
+    `A situação de ${alert.patient.name} foi confirmada como emergência.`,
+    'emergency_confirmed',
+    alert.latitude,
+    alert.longitude,
+  );
+
+
       return this.confirmAlert(alertId);
     } catch (error) {
       if (
