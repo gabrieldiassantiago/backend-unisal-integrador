@@ -11,12 +11,12 @@ import { FallAlertsGateway } from './fall-alerts.gateway';
 import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { alertNoExisting } from '@src/errors/alertNoExistint';
+import { alertNoExisting } from '@src/errors/alertNoExistint'; // Mantendo seu import original
 import { FamilyService } from '@src/family/family.service';
 import { MessagingService } from '@src/messaging/messaging.service';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { DeviceNotFoundException } from '@src/common/exceptions/custom.exceptions';
-import { Cron, CronExpression } from '@nestjs/schedule';
+// import { Cron, CronExpression } from '@nestjs/schedule'; // Descomente se for usar o Cron
 
 @Injectable()
 export class FallAlertsService {
@@ -34,9 +34,9 @@ export class FallAlertsService {
   }
 
   /**
-   * Verificar alertas confirmados antigos
+   * Verificar alertas confirmados antigos (Job)
    */
-  //@Cron(CronExpression.EVERY_5_MINUTES)
+  // @Cron(CronExpression.EVERY_5_MINUTES)
   async checkConfirmedAlertsJob() {
     this.logger.log('🕵️ Executando Job: Verificar alertas confirmados...');
 
@@ -54,7 +54,9 @@ export class FallAlertsService {
       return;
     }
 
-    this.logger.log(`⚠️ Encontrados ${alerts.length} alertas confirmados antigos.`);
+    this.logger.log(
+      `⚠️ Encontrados ${alerts.length} alertas confirmados antigos.`,
+    );
 
     for (const alert of alerts) {
       let targetPhone: string | null = null;
@@ -100,7 +102,6 @@ export class FallAlertsService {
 
   /**
    * Marcar alerta como RESOLVIDO (Finalizado)
-   * REFATORADO: Agora notifica via Push
    */
   async markResolved(alertId: string) {
     const alert = await this.prismaService.fallAlert.findUnique({
@@ -117,7 +118,7 @@ export class FallAlertsService {
       },
     });
 
-    this.logger.log(`✅ Alerta ${alertId} marcado como RESOLVED via WhatsApp.`);
+    this.logger.log(`✅ Alerta ${alertId} marcado como RESOLVED.`);
 
     this.gateway.emitAlertStatusChange({
       id: updated.id,
@@ -171,8 +172,7 @@ export class FallAlertsService {
 
       for (const chunk of chunks) {
         try {
-          const ticketChunk =
-            await this.expo.sendPushNotificationsAsync(chunk);
+          const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
           this.logger.log('Push notifications enviadas:', ticketChunk);
 
           ticketChunk.forEach((ticket, index) => {
@@ -185,7 +185,10 @@ export class FallAlertsService {
         }
       }
     } catch (error: any) {
-      this.logger.error('Erro ao enviar push notifications:', error.message);
+      this.logger.error(
+        'Erro ao enviar push notifications:',
+        error.message,
+      );
     }
   }
 
@@ -198,7 +201,7 @@ export class FallAlertsService {
     alertId: string,
     title: string,
     body: string,
-    type: string, // 'fall_alert', 'false_alarm', 'resolved'
+    type: string,
     latitude?: number,
     longitude?: number,
   ) {
@@ -412,9 +415,10 @@ export class FallAlertsService {
 
   /**
    * Marcar alerta como FALSO ALARME
-   * - App: usa caregiverId, respondedBy, permissões
-   * - WhatsApp: fromWhatsApp = true → NÃO usa respondedBy
    */
+  /**
+     * Marcar alerta como FALSO ALARME
+     */
   async markFalseAlarm(
     alertId: string,
     caregiverId?: string | null,
@@ -432,6 +436,7 @@ export class FallAlertsService {
         throw new BadRequestException('Este alerta já foi encerrado');
       }
 
+      // Definimos que caregiver pode ser qualquer objeto com a propriedade name ou null
       let caregiver: { name: string } | null = null;
 
       if (!fromWhatsApp) {
@@ -449,13 +454,24 @@ export class FallAlertsService {
           );
         }
 
+        // Busca normal sem select (retorna User completo)
         caregiver = await this.prismaService.user.findUnique({
           where: { id: caregiverId },
         });
 
         if (!caregiver) {
-          throw new BadRequestException(`Usuario nao encontrado: ${caregiverId}`);
+          throw new BadRequestException(
+            `Usuario nao encontrado: ${caregiverId}`,
+          );
         }
+      }
+
+      // CORREÇÃO AQUI: Removemos o "select" e o "as any"
+      // Se vier do WhatsApp e tivermos o ID, buscamos o usuário completo
+      if (fromWhatsApp && caregiverId) {
+        caregiver = await this.prismaService.user.findUnique({
+          where: { id: caregiverId },
+        });
       }
 
       const caregiverName = caregiver?.name ?? 'um responsável';
@@ -465,7 +481,7 @@ export class FallAlertsService {
         respondedAt: new Date(),
       };
 
-      if (!fromWhatsApp && caregiverId) {
+      if (caregiverId) {
         dataUpdate.respondedBy = caregiverId;
       }
 
@@ -555,7 +571,7 @@ export class FallAlertsService {
           patientId: updated.patientId,
           status: updated.status,
         };
-        if (!fromWhatsApp && caregiverId) {
+        if (caregiverId) {
           wsPayload.respondedBy = caregiverId;
         }
         this.gateway.emitAlertStatusChange(wsPayload);
@@ -580,7 +596,7 @@ export class FallAlertsService {
 
       return {
         id: updated.id,
-        caregiverId: fromWhatsApp ? null : caregiverId,
+        caregiverId: caregiverId,
         status: updated.status,
       };
     } catch (error) {
@@ -600,8 +616,7 @@ export class FallAlertsService {
 
   /**
    * Marcar alerta como VERIFICANDO
-   * - App: usa caregiverId, respondedBy, permissões
-   * - WhatsApp: fromWhatsApp = true → não usa respondedBy, nem reminder direto pro usuário
+   * CORRIGIDO: Envia mensagem/mapa mesmo via WhatsApp
    */
   async markVerifying(
     alertId: string,
@@ -651,13 +666,13 @@ export class FallAlertsService {
           );
         }
       } else {
-        // from WhatsApp: ainda exigimos que esteja PENDING
-        if (alert.status !== 'PENDING') {
+        if (alert.status !== 'PENDING' && alert.status !== 'VERIFYING') {
           throw new BadRequestException('Alerta ja foi processado');
         }
       }
 
-      const respondingUser = !fromWhatsApp && caregiverId
+      // Tenta identificar o usuário que respondeu (seja App ou WhatsApp com ID identificado)
+      const respondingUser = caregiverId
         ? await this.prismaService.user.findUnique({
           where: { id: caregiverId },
           select: { id: true, name: true, phone: true, role: true },
@@ -671,7 +686,7 @@ export class FallAlertsService {
         respondedAt: new Date(),
         verificationDeadline,
       };
-      if (!fromWhatsApp && caregiverId) {
+      if (caregiverId) {
         dataUpdate.respondedBy = caregiverId;
       }
 
@@ -681,10 +696,11 @@ export class FallAlertsService {
       });
 
       this.logger.log(
-        `Alerta ${alertId} marcado como VERIFYING por ${respondingUser?.name ?? 'respondente'
+        `Alerta ${alertId} marcado como VERIFYING por ${respondingUser?.name ?? 'Via WhatsApp'
         }`,
       );
 
+      // 1. Emitir WebSocket
       try {
         const wsPayload: any = {
           id: updated.id,
@@ -692,7 +708,7 @@ export class FallAlertsService {
           status: updated.status,
           verificationDeadline,
         };
-        if (!fromWhatsApp && caregiverId) {
+        if (caregiverId) {
           wsPayload.respondedBy = caregiverId;
         }
         this.gateway.emitAlertStatusChange(wsPayload);
@@ -700,6 +716,7 @@ export class FallAlertsService {
         this.logger.error('Erro ao emitir WebSocket:', wsError.message);
       }
 
+      // 2. Cancelar Jobs
       try {
         const jobs = await this.alertsQueue.getJobs([
           'delayed',
@@ -710,58 +727,59 @@ export class FallAlertsService {
         for (const job of jobs) {
           if (job.data?.alertId === alertId) {
             await job.remove();
-            this.logger.log(`🛑 Job ${job.name} cancelado`);
           }
         }
       } catch (err: any) {
         this.logger.error('Erro ao cancelar jobs:', err.message);
       }
 
-      // 🟢 SOMENTE APP: agendar requestConfirmation + enviar lembrete imediato
-      if (!fromWhatsApp && caregiverId) {
-        try {
+      // 3. Enviar mensagem de lembrete com Mapa
+      // IMPORTANTE: Agora roda sempre, independente de ser WhatsApp ou não
+      try {
+        // Apenas agenda o requestConfirmation se tivermos um caregiverId real (lógica do App)
+        if (caregiverId) {
           await this.alertsQueue.add(
             'requestConfirmation',
             { alertId: alert.id, caregiverId },
             { delay: 10000 },
           );
-        } catch (queueError: any) {
-          this.logger.error('Erro ao agendar job:', queueError.message);
         }
 
-        const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
+        const googleMapsLink = `https://maps.google.com/?q=${alert.latitude},${alert.longitude}`;
 
-        try {
-          if (respondingUser?.phone) {
+        // Lógica de envio da mensagem com botões/mapa
+        if (respondingUser?.phone) {
+          // Se sabemos quem é o usuário, manda pra ele
+          await this.messagingService.sendVerificationReminderWithButtons({
+            to: respondingUser.phone,
+            alertId: alert.id,
+            patientName: alert.patient.name,
+            location: googleMapsLink,
+            contactName: respondingUser.name,
+          });
+        } else {
+          // Fallback: Se não achamos o usuário (apenas um contato de emergência),
+          // manda para o contato prioritário
+          const priorityContact =
+            await this.prismaService.emergencyContact.findFirst({
+              where: { patientId: alert.patientId, priority: 1 },
+            });
+
+          if (priorityContact) {
             await this.messagingService.sendVerificationReminderWithButtons({
-              to: respondingUser.phone,
+              to: priorityContact.phone,
               alertId: alert.id,
               patientName: alert.patient.name,
               location: googleMapsLink,
-              contactName: respondingUser.name,
+              contactName: priorityContact.name,
             });
-          } else {
-            const priorityContact =
-              await this.prismaService.emergencyContact.findFirst({
-                where: { patientId: alert.patientId, priority: 1 },
-              });
-
-            if (priorityContact) {
-              await this.messagingService.sendVerificationReminderWithButtons({
-                to: priorityContact.phone,
-                alertId: alert.id,
-                patientName: alert.patient.name,
-                location: googleMapsLink,
-                contactName: priorityContact.name,
-              });
-            }
           }
-        } catch (notifyError: any) {
-          this.logger.error(
-            'Erro ao enviar lembrete/verificacao:',
-            notifyError.message,
-          );
         }
+      } catch (notifyError: any) {
+        this.logger.error(
+          'Erro ao enviar lembrete/verificacao:',
+          notifyError.message,
+        );
       }
 
       return updated;
@@ -782,8 +800,6 @@ export class FallAlertsService {
 
   /**
    * Confirmar emergencia apos verificacao
-   * - App: valida caregiverId
-   * - WhatsApp: fromWhatsApp = true → não exige caregiverId
    */
   async confirmAfterVerification(
     alertId: string,
@@ -823,7 +839,7 @@ export class FallAlertsService {
       }
 
       try {
-        const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
+        const googleMapsLink = `https://maps.google.com/?q=${alert.latitude},${alert.longitude}`;
         const allContacts = await this.prismaService.emergencyContact.findMany({
           where: { patientId: alert.patientId },
         });
@@ -879,7 +895,7 @@ export class FallAlertsService {
       throw new BadRequestException('Este alerta já está finalizado');
     }
 
-    const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
+    const googleMapsLink = `https://maps.google.com/?q=${alert.latitude},${alert.longitude}`;
 
     const contatos = await this.prismaService.emergencyContact.findMany({
       where: { patientId: alert.patientId },
@@ -888,7 +904,9 @@ export class FallAlertsService {
     });
 
     if (contatos.length === 0) {
-      throw new BadRequestException('Nenhum contato de emergencia encontrado.');
+      throw new BadRequestException(
+        'Nenhum contato de emergencia encontrado.',
+      );
     }
 
     this.logger.log(`\n=== ALERTA CONFIRMADO: ${alertId} ===`);
