@@ -11,12 +11,12 @@ import { FallAlertsGateway } from './fall-alerts.gateway';
 import { CreateFallAlertDto } from './dtos/create-fall-alert.dto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { alertNoExisting } from '@src/errors/alertNoExistint'; // Mantendo seu import original
+import { alertNoExisting } from '@src/errors/alertNoExistint';
 import { FamilyService } from '@src/family/family.service';
 import { MessagingService } from '@src/messaging/messaging.service';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { DeviceNotFoundException } from '@src/common/exceptions/custom.exceptions';
-// import { Cron, CronExpression } from '@nestjs/schedule'; // Descomente se for usar o Cron
+// import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class FallAlertsService {
@@ -416,9 +416,6 @@ export class FallAlertsService {
   /**
    * Marcar alerta como FALSO ALARME
    */
-  /**
-     * Marcar alerta como FALSO ALARME
-     */
   async markFalseAlarm(
     alertId: string,
     caregiverId?: string | null,
@@ -436,7 +433,6 @@ export class FallAlertsService {
         throw new BadRequestException('Este alerta já foi encerrado');
       }
 
-      // Definimos que caregiver pode ser qualquer objeto com a propriedade name ou null
       let caregiver: { name: string } | null = null;
 
       if (!fromWhatsApp) {
@@ -454,7 +450,6 @@ export class FallAlertsService {
           );
         }
 
-        // Busca normal sem select (retorna User completo)
         caregiver = await this.prismaService.user.findUnique({
           where: { id: caregiverId },
         });
@@ -466,8 +461,7 @@ export class FallAlertsService {
         }
       }
 
-      // CORREÇÃO AQUI: Removemos o "select" e o "as any"
-      // Se vier do WhatsApp e tivermos o ID, buscamos o usuário completo
+      // Se vier do WhatsApp e tiver ID, busca sem select para ter o nome
       if (fromWhatsApp && caregiverId) {
         caregiver = await this.prismaService.user.findUnique({
           where: { id: caregiverId },
@@ -516,17 +510,10 @@ export class FallAlertsService {
         for (const contact of allContacts) {
           try {
             if (contact.priority === 1) {
-              try {
-                await this.messagingService.sendFalseAlarm(
-                  contact.phone,
-                  'Recebemos sua mensagem, obrigado por avisar a gente que foi um falso alarme',
-                );
-              } catch (whatsappError: any) {
-                this.logger.error(
-                  `Erro ao enviar WhatsApp para ${contact.name}:`,
-                  whatsappError.message,
-                );
-              }
+              await this.messagingService.sendFalseAlarm(
+                contact.phone,
+                'Recebemos sua mensagem, obrigado por avisar a gente que foi um falso alarme',
+              );
             }
 
             const buscarTempoAlerta =
@@ -544,13 +531,11 @@ export class FallAlertsService {
             const msg =
               `Se você está recebendo esta mensagem, é porque ` +
               `${alert.patient.name} teve um alerta de possível queda às ${alertTime}, ` +
-              `mas já recebeu atendimento.
-\n` +
+              `mas já recebeu atendimento.\n` +
               `Para saber mais informações, entre em contato com ${caregiverName}.\n` +
               `Fique tranquilo(a).`;
 
             await this.messagingService.sendFalseAlarm(contact.phone, msg);
-            this.logger.log(`WhatsApp enviado para ${contact.name}`);
           } catch (whatsappError: any) {
             this.logger.error(
               `Erro ao enviar WhatsApp para ${contact.name}:`,
@@ -581,15 +566,11 @@ export class FallAlertsService {
 
       try {
         const jobs = await this.alertsQueue.getJobs(['delayed']);
-        let canceledCount = 0;
-
         for (const job of jobs) {
           if (job.data.alertId === alertId) {
             await job.remove();
-            canceledCount++;
           }
         }
-        this.logger.log(`${canceledCount} jobs cancelados`);
       } catch (queueError: any) {
         this.logger.error('Erro ao cancelar jobs:', queueError.message);
       }
@@ -600,7 +581,6 @@ export class FallAlertsService {
         status: updated.status,
       };
     } catch (error) {
-      this.logger.error('Erro em markFalseAlarm:', error);
       if (
         error instanceof NotFoundException ||
         error instanceof BadRequestException ||
@@ -616,12 +596,12 @@ export class FallAlertsService {
 
   /**
    * Marcar alerta como VERIFICANDO
-   * CORRIGIDO: Envia mensagem/mapa mesmo via WhatsApp
    */
   async markVerifying(
     alertId: string,
     caregiverId?: string | null,
     fromWhatsApp = false,
+    respondingPhone?: string, // <--- NOVO PARÂMETRO
   ) {
     try {
       const alert = await this.prismaService.fallAlert.findUnique({
@@ -671,7 +651,7 @@ export class FallAlertsService {
         }
       }
 
-      // Tenta identificar o usuário que respondeu (seja App ou WhatsApp com ID identificado)
+      // Tenta achar User pelo ID se fornecido
       const respondingUser = caregiverId
         ? await this.prismaService.user.findUnique({
           where: { id: caregiverId },
@@ -679,6 +659,19 @@ export class FallAlertsService {
         })
         : null;
 
+      // Se não achou User, mas temos o telefone (WhatsApp), tentamos achar o nome no contato de emergência
+      let contactName = respondingUser?.name;
+      if (!contactName && respondingPhone) {
+        const contact = await this.prismaService.emergencyContact.findFirst({
+          where: {
+            patientId: alert.patientId,
+            phone: { contains: respondingPhone.replace(/\D/g, '').slice(-9) },
+          },
+        });
+        if (contact) contactName = contact.name;
+      }
+
+      const finalName = contactName ?? 'Alguém';
       const verificationDeadline = new Date(Date.now() + 120000); // 2 minutos
 
       const dataUpdate: any = {
@@ -696,8 +689,7 @@ export class FallAlertsService {
       });
 
       this.logger.log(
-        `Alerta ${alertId} marcado como VERIFYING por ${respondingUser?.name ?? 'Via WhatsApp'
-        }`,
+        `Alerta ${alertId} marcado como VERIFYING por ${finalName}`,
       );
 
       // 1. Emitir WebSocket
@@ -716,7 +708,7 @@ export class FallAlertsService {
         this.logger.error('Erro ao emitir WebSocket:', wsError.message);
       }
 
-      // 2. Cancelar Jobs
+      // 2. Cancelar Jobs Antigos
       try {
         const jobs = await this.alertsQueue.getJobs([
           'delayed',
@@ -734,32 +726,34 @@ export class FallAlertsService {
       }
 
       // 3. Enviar mensagem de lembrete com Mapa
-      // IMPORTANTE: Agora roda sempre, independente de ser WhatsApp ou não
       try {
-        // Apenas agenda o requestConfirmation se tivermos um caregiverId real (lógica do App)
-        if (caregiverId) {
-          await this.alertsQueue.add(
-            'requestConfirmation',
-            { alertId: alert.id, caregiverId },
-            { delay: 10000 },
-          );
-        }
+        // Agenda o job de confirmação passando o TELEFONE de quem respondeu
+        await this.alertsQueue.add(
+          'requestConfirmation',
+          {
+            alertId: alert.id,
+            caregiverId,
+            respondingPhone, // <--- PASSANDO O TELEFONE PARA O JOB
+          },
+          { delay: 10000 },
+        );
 
-        const googleMapsLink = `https://maps.google.com/?q=${alert.latitude},${alert.longitude}`;
+        const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
 
-        // Lógica de envio da mensagem com botões/mapa
-        if (respondingUser?.phone) {
-          // Se sabemos quem é o usuário, manda pra ele
+        // Define para quem enviar a mensagem IMEDIATA
+        // Prioridade: Telefone passado (respondingPhone) > Telefone do User > Contato Prioridade 1
+        const targetPhone = respondingPhone || respondingUser?.phone;
+
+        if (targetPhone) {
           await this.messagingService.sendVerificationReminderWithButtons({
-            to: respondingUser.phone,
+            to: targetPhone,
             alertId: alert.id,
             patientName: alert.patient.name,
             location: googleMapsLink,
-            contactName: respondingUser.name,
+            contactName: finalName,
           });
         } else {
-          // Fallback: Se não achamos o usuário (apenas um contato de emergência),
-          // manda para o contato prioritário
+          // Fallback se não soubermos quem é
           const priorityContact =
             await this.prismaService.emergencyContact.findFirst({
               where: { patientId: alert.patientId, priority: 1 },
@@ -784,7 +778,6 @@ export class FallAlertsService {
 
       return updated;
     } catch (error) {
-      this.logger.error('Erro em markVerifying:', error);
       if (
         error instanceof NotFoundException ||
         error instanceof BadRequestException ||
@@ -839,7 +832,7 @@ export class FallAlertsService {
       }
 
       try {
-        const googleMapsLink = `https://maps.google.com/?q=${alert.latitude},${alert.longitude}`;
+        const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
         const allContacts = await this.prismaService.emergencyContact.findMany({
           where: { patientId: alert.patientId },
         });
@@ -866,7 +859,6 @@ export class FallAlertsService {
 
       return this.confirmAlert(alertId);
     } catch (error) {
-      this.logger.error('Erro em confirmAfterVerification:', error);
       if (
         error instanceof NotFoundException ||
         error instanceof BadRequestException ||
@@ -895,7 +887,7 @@ export class FallAlertsService {
       throw new BadRequestException('Este alerta já está finalizado');
     }
 
-    const googleMapsLink = `https://maps.google.com/?q=${alert.latitude},${alert.longitude}`;
+    const googleMapsLink = `https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`;
 
     const contatos = await this.prismaService.emergencyContact.findMany({
       where: { patientId: alert.patientId },
