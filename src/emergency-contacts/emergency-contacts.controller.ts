@@ -1,8 +1,9 @@
-import { Body, ConflictException, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, ConflictException, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiConflictResponse } from '@nestjs/swagger';
 import { EmergencyContactsService } from './emergency-contacts.service';
 import { CreateEmergencyContactDto } from './dtos/CreateEmergencyContactDto';
 import { ContactExistError } from '@src/errors/contactExistError';
+import { UpdateEmergencyContactDto } from './dtos/UpdateEmergencyContactDto';
 
 @ApiTags('Contatos de Emergência')
 @Controller('emergency-contacts')
@@ -53,5 +54,20 @@ export class EmergencyContactsController {
   @Get(':patientId')
   async getContactsByPatient(@Param('patientId') patientId: string) {
     return this.emergencyContactsService.getContactsByPatient(patientId);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Atualizar contato' })
+  async update(
+    @Param('id') id: string,
+    @Body() data: Partial<UpdateEmergencyContactDto> & { priority?: number }
+  ) {
+    return this.emergencyContactsService.updateContact(id, data);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Deletar contato' })
+  async delete(@Param('id') id: string) {
+    return this.emergencyContactsService.deleteContact(id);
   }
 }

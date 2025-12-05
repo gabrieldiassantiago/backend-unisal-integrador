@@ -5,8 +5,8 @@ import axios, { AxiosInstance } from 'axios';
 export class MessagingService {
   private readonly logger = new Logger(MessagingService.name);
   private httpClient: AxiosInstance;
-  private readonly apiKey = 'B0F1888ADAE4-4C72-B849-B12709F80913';
-  private readonly baseUrl = 'http://104.248.184.126:8080';
+  private readonly apiKey = 'B0F1888ADAE4-4C72-B849-B12709F80913'
+  private readonly baseUrl = 'http://104.248.184.126:8080'
 
   constructor() {
     this.httpClient = axios.create({
@@ -97,6 +97,36 @@ export class MessagingService {
       this.logger.warn('⚠️ Enviando como texto simples (fallback)...');
       return await this.sendTextWithOptions(params);
     }
+  }
+
+  async sendResolutionCheck(params: {
+    to: string;
+    alertId: string;
+    patientName: string;
+    contactName: string;
+  }): Promise<any> {
+    this.logger.log(`🕵️ Enviando checagem de resolução para ${params.contactName}`);
+
+    // Tenta enviar com botões, mas o texto já instrui o uso do "1" caso botões falhem
+    return await this.sendButtons({
+      to: params.to,
+      title: '✅ ATENDIMENTO FINALIZADO?',
+      description: `Olá, ${params.contactName}.
+
+O alerta de queda de *${params.patientName}* ainda consta como "CONFIRMADO/EMERGÊNCIA".
+
+A situação já foi resolvida e o paciente está bem?
+
+Responda com:
+1️⃣ ou clique abaixo para finalizar.`,
+      footer: '🤖 Sistema InteliSensor',
+      buttons: [
+        {
+          id: `resolve_alert_${params.alertId}`,
+          title: '✅ Sim, Resolvido',
+        }
+      ],
+    });
   }
 
   /**
@@ -210,7 +240,7 @@ ${priorityEmoji} ${priorityText}
   }
 
   /**
-   * ✅ CORRIGIDO: Enviar lembrete de verificação COM BOTÕES
+   *  Enviar lembrete de verificação COM BOTÕES
    */
   async sendVerificationReminderWithButtons(params: {
     to: string;
@@ -289,7 +319,7 @@ ${priorityEmoji} ${priorityText}
   }
 
   /**
-   * ✅ CORRIGIDO: Enviar lembrete de verificação COM ENQUETE
+   *  Enviar lembrete de verificação COM ENQUETE
    */
   async sendVerificationReminderWithPoll(params: {
     to: string;
@@ -302,12 +332,12 @@ ${priorityEmoji} ${priorityText}
 
     await this.sendText(params.to, `⏰ *LEMBRETE: Você está verificando?*
 
-${params.contactName}, você indicou que estava verificando.
+      ${params.contactName}, você indicou que estava verificando.
 
-Paciente: *${params.patientName}*
+      Paciente: *${params.patientName}*
 
-📍 Localização:
-${params.location}
+      📍 Localização:
+      ${params.location}
 
 Por favor, confirme o status atual:`);
 
@@ -377,16 +407,8 @@ Cada segundo conta! 🙏${priorityText}`;
   /**
    * Enviar notificação de falso alarme
    */
-  async sendFalseAlarm(to: string, patientName: string, responderName: string): Promise<any> {
-    const message = `✅ *FALSO ALARME*
-
-Oi! 😊
-
-Boas notícias sobre *${patientName}*!
-
-${responderName} confirmou que foi um *falso alarme*. Tudo está bem! ✨
-
-Você pode ficar tranquilo(a). 💚`;
+  async sendFalseAlarm(to: string, msg: string): Promise<any> {
+    const message = `${msg}`;
 
     return await this.sendText(to, message);
   }

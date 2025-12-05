@@ -1,8 +1,10 @@
-// email.service.ts
 import { Injectable, InternalServerErrorException, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Mailgun from 'mailgun.js';
 import * as FormData from 'form-data';
+import * as fs from 'fs';
+import * as path from 'path';
+
 
 @Injectable()
 export class EmailService implements OnModuleInit {
@@ -35,21 +37,31 @@ export class EmailService implements OnModuleInit {
     try {
       const emailContent = this.generateVerificationEmailHtml(code, userName);
 
-      this.logger.log(`📧 Enviando código de verificação para ${email}: ${code}`);
+      const logoPath = path.join(__dirname, 'templates', 'assets', 'logo.png');
+      const lockPath = path.join(__dirname, 'templates', 'assets', 'lock.png');
+
+      const inlineFiles = [
+        {
+          filename: 'logo.png',
+          data: fs.readFileSync(logoPath),
+        },
+        {
+          filename: 'lock.png',
+          data: fs.readFileSync(lockPath),
+        },
+      ];
 
       const result = await this.mg.messages.create(this.domain, {
         from: `${this.fromName} <${this.fromEmail}>`,
         to: [email],
         subject: '🔐 Verifique seu email - InteliSensor',
         html: emailContent,
-        text: `Olá ${userName}!\n\nSeu código de verificação é: ${code}\n\nEste código expira em 10 minutos.`,
+        text: `Olá ${userName}! Seu código de verificação é: ${code}`,
+        inline: inlineFiles,
       });
 
-      this.logger.log(`✅ Email enviado com sucesso! ID: ${result.id}`);
     } catch (error) {
-      this.logger.error(`❌ Erro ao enviar email: ${error.message}`, error.stack);
-      this.logger.warn(`⚠️  FALLBACK - Código de verificação para ${email}: ${code}`);
-
+      this.logger.error(`❌ Erro ao enviar email: ${error.message}`);
       throw new InternalServerErrorException(`Falha ao entregar email de verificação: ${error.message}`);
     }
   }

@@ -1,6 +1,7 @@
 import { Controller, Post, Body, Logger, Headers } from '@nestjs/common';
 import { FallAlertsService } from '../fall-alerts/fall-alerts.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MessagingService } from '@src/messaging/messaging.service';
 
 @Controller('webhook')
 export class WebhookController {
@@ -9,41 +10,32 @@ export class WebhookController {
   constructor(
     private readonly fallAlertsService: FallAlertsService,
     private readonly prismaService: PrismaService,
+    private readonly messagingService: MessagingService,
   ) { }
 
   /**
    * Webhook para receber eventos da Evolution API
    */
-
   @Post('evolution')
   async handleEvolutionWebhook(@Body() payload: any, @Headers() headers: any) {
-    this.logger.log('📥 ================================');
-    this.logger.log('📥 WEBHOOK RECEBIDO DA EVOLUTION API');
-    this.logger.log('📥 ================================');
-    this.logger.log(`📦 Event: ${payload.event}`);
-    this.logger.log(`📊 Payload COMPLETO: ${JSON.stringify(payload, null, 2)}`);
-    this.logger.log(`🔑 Data keys: ${Object.keys(payload.data || {}).join(', ')}`);
+    // Logs reduzidos para limpeza, mantenha verbose se necessário
+    // this.logger.log('📥 WEBHOOK RECEBIDO DA EVOLUTION API');
 
     try {
-      const { event, data, instance } = payload;
+      const { event, data } = payload;
 
       // Processar apenas eventos relevantes
       if (event === 'messages.upsert') {
-        this.logger.log('🔵 Processando messages.upsert...');
         return await this.handleMessageReceived(data);
       }
 
       if (event === 'messages.update') {
-        this.logger.log('🔵 Processando messages.update...');
         return await this.handleMessageUpdate(data);
       }
 
-      this.logger.log(`Evento ignorado: ${event}`);
       return { status: 'ignored', event };
-
     } catch (error: any) {
-      this.logger.error(' Erro ao processar webhook:', error.message);
-      this.logger.error(error.stack);
+      this.logger.error('Erro ao processar webhook:', error.message);
       return { status: 'error', message: error.message };
     }
   }
@@ -51,12 +43,8 @@ export class WebhookController {
   /**
    * Processar mensagem recebida (MESSAGES_UPSERT)
    */
-
   private async handleMessageReceived(data: any) {
     try {
-      this.logger.log('📨 handleMessageReceived chamado');
-      this.logger.log(`📦 Data recebido: ${JSON.stringify(data, null, 2)}`);
-
       // O data pode vir como objeto único ou array
       const messages = Array.isArray(data) ? data : [data];
 
@@ -64,18 +52,10 @@ export class WebhookController {
         const message = messageData?.message;
         const key = messageData?.key;
 
-        if (!message || !key) {
-          this.logger.warn('⚠️ Mensagem sem message ou key, pulando...');
-          continue;
-        }
-
-        this.logger.log(`🔍 Checando message keys: ${Object.keys(message).join(', ')}`);
+        if (!message || !key) continue;
 
         // Ignorar mensagens enviadas por nós
-        if (key?.fromMe) {
-          this.logger.log('ℹ️ Mensagem enviada por nós, ignorando');
-          continue;
-        }
+        if (key?.fromMe) continue;
 
         const remoteJid = key?.remoteJid;
         const phoneNumber = remoteJid?.replace('@s.whatsapp.net', '');
@@ -95,26 +75,24 @@ export class WebhookController {
         }
 
         // 3. Verificar se é mensagem de texto simples (resposta numérica)
-        const textMessage = message?.conversation || message?.extendedTextMessage?.text;
+        const textMessage =
+          message?.conversation || message?.extendedTextMessage?.text;
 
         if (textMessage) {
-          this.logger.log(`💬 Mensagem de texto: "${textMessage}"`);
-
           // Verificar se é número (1, 2, 3)
           if (/^[123]$/.test(textMessage.trim())) {
             this.logger.log(`🔢 Resposta numérica detectada: ${textMessage}`);
-            return await this.handleNumericResponse(phoneNumber, textMessage.trim());
+            return await this.handleNumericResponse(
+              phoneNumber,
+              textMessage.trim(),
+            );
           }
         }
-
-        this.logger.log('ℹ️ Mensagem não é resposta de poll ou numérica');
       }
 
       return { status: 'ignored', reason: 'not_actionable' };
-
     } catch (error: any) {
       this.logger.error(`❌ Erro ao processar mensagem: ${error.message}`);
-      this.logger.error(error.stack);
       throw error;
     }
   }
@@ -124,8 +102,6 @@ export class WebhookController {
    */
   private async handleMessageUpdate(data: any) {
     try {
-      this.logger.log('🔄 Atualização de mensagem recebida');
-
       const message = data?.message;
 
       if (message?.pollUpdateMessage) {
@@ -134,7 +110,6 @@ export class WebhookController {
       }
 
       return { status: 'ignored', reason: 'not_poll_update' };
-
     } catch (error: any) {
       this.logger.error(`❌ Erro ao processar atualização: ${error.message}`);
       throw error;
@@ -151,38 +126,35 @@ export class WebhookController {
 
       const phoneNumber = key?.remoteJid?.replace('@s.whatsapp.net', '');
       const selectedButtonId = buttonResponse?.selectedButtonId;
-      const displayText = buttonResponse?.selectedDisplayText;
-
-      this.logger.log(`\n🔘 ================================`);
-      this.logger.log(`🔘 RESPOSTA DE BOTÃO RECEBIDA`);
-      this.logger.log(`🔘 ================================`);
-      this.logger.log(`📱 De: ${phoneNumber}`);
-      this.logger.log(`🆔 Button ID: ${selectedButtonId}`);
-      this.logger.log(`📝 Display Text: ${displayText}`);
-      this.logger.log(`🔘 ================================\n`);
 
       if (!selectedButtonId) {
-        this.logger.warn('⚠️ Nenhum botão selecionado');
         return { status: 'ignored', reason: 'no_button_selected' };
       }
 
-      // O ID do botão tem formato: action_alertId
-      // Ex: confirm_emergency_123, verify_456, false_alarm_789
-      const parts = selectedButtonId.split('_');
+      // O ID do botão tem formato: action_alertId (ex: confirm_123)
+      // Extrair apenas a ação base, ignorando o ID do alerta se houver sufixo
+      // Assumindo formatos simples como 'confirm_emergency', 'verify', etc.
+      // Se houver ID no botão, o processAction vai buscar o alerta ATIVO no banco de qualquer forma.
 
-      // Se tiver alertId no final, extrair
+      const parts = selectedButtonId.split('_');
+      // Lógica simplificada: Se o último item for numérico ou UUID, removemos. 
+      // Mas suas ações são strings fixas no service geralmente, então vamos pegar a action pura.
+
+      // Ajuste para o seu padrão: se o botão for 'confirm_emergency_uuid', pegamos 'confirm_emergency'
+      // Se for apenas 'confirm_emergency', pegamos ele todo.
+
       let action = selectedButtonId;
-      if (parts.length > 1) {
-        // Pegar tudo menos o último elemento (que seria o alertId)
+      // Regex básica para ver se termina com UUID ou ID numérico grande
+      if (parts.length > 1 && parts[parts.length - 1].length > 10) {
         action = parts.slice(0, -1).join('_');
       }
 
-      this.logger.log(`✅ Ação identificada: ${action}`);
-
+      this.logger.log(`✅ Ação identificada (botão): ${action}`);
       return await this.processAction(phoneNumber, action);
-
     } catch (error: any) {
-      this.logger.error(`❌ Erro ao processar resposta de botão: ${error.message}`);
+      this.logger.error(
+        `❌ Erro ao processar resposta de botão: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -194,43 +166,35 @@ export class WebhookController {
     try {
       const pollUpdate = data?.message?.pollUpdateMessage;
       const key = data?.key;
-
       const phoneNumber = key?.remoteJid?.replace('@s.whatsapp.net', '');
       const votes = pollUpdate?.vote || [];
 
-      this.logger.log(`\n🗳️ ================================`);
-      this.logger.log(`🗳️ VOTO EM POLL RECEBIDO`);
-      this.logger.log(`🗳️ ================================`);
-      this.logger.log(`📱 De: ${phoneNumber}`);
-      this.logger.log(`📊 Votos: ${JSON.stringify(votes)}`);
-      this.logger.log(`🗳️ ================================\n`);
-
       if (!votes || votes.length === 0) {
-        this.logger.warn('⚠️ Nenhum voto encontrado no poll');
         return { status: 'ignored', reason: 'no_votes' };
       }
 
-      // O voto vem como array de índices (0, 1, 2)
-      const selectedIndex = votes[0];
+      const selectedIndex = votes[0]; // Pega o primeiro voto
 
-      // Mapear índice para ação
-      const actionMap = {
-        0: 'confirm_emergency',  // Opção 1: Confirmar Emergência
-        1: 'verify',              // Opção 2: Estou Verificando
-        2: 'false_alarm',         // Opção 3: Falso Alarme
+      const actionMap: Record<number, string> = {
+        0: 'confirm_emergency', // Opção 1
+        1: 'verify',            // Opção 2
+        2: 'false_alarm',       // Opção 3
       };
 
       const action = actionMap[selectedIndex];
 
       if (!action) {
-        this.logger.warn(`⚠️ Índice de voto inválido: ${selectedIndex}`);
-        return { status: 'error', reason: 'invalid_vote_index', index: selectedIndex };
+        return {
+          status: 'error',
+          reason: 'invalid_vote_index',
+          index: selectedIndex,
+        };
       }
 
-      this.logger.log(`✅ Ação identificada: ${action} (índice ${selectedIndex})`);
-
+      this.logger.log(
+        `✅ Ação identificada (poll): ${action} (índice ${selectedIndex})`,
+      );
       return await this.processAction(phoneNumber, action);
-
     } catch (error: any) {
       this.logger.error(`❌ Erro ao processar voto: ${error.message}`);
       throw error;
@@ -239,189 +203,192 @@ export class WebhookController {
 
   /**
    * Processar resposta numérica (1, 2, 3)
-   * Suporta dois formatos:
-   * - Alerta inicial: 1=confirmar, 2=verificar, 3=falso alarme
-   * - Lembrete verificação: 1=emergência, 2=tudo bem
    */
   private async handleNumericResponse(phoneNumber: string, number: string) {
     try {
-      this.logger.log(`\n🔢 ================================`);
-      this.logger.log(`🔢 RESPOSTA NUMÉRICA DETECTADA`);
-      this.logger.log(`🔢 ================================`);
-      this.logger.log(`📱 De: ${phoneNumber}`);
-      this.logger.log(`🔢 Número: ${number}`);
-
-      // Buscar contato para determinar o alerta
       const cleanPhone = phoneNumber.replace(/\D/g, '');
+
+      // Buscar contato para determinar o alerta e o status atual
       const contact = await this.prismaService.emergencyContact.findFirst({
         where: {
-          phone: {
-            contains: cleanPhone.slice(-9),
-          },
+          phone: { contains: cleanPhone.slice(-9) },
         },
       });
 
       if (!contact) {
-        this.logger.warn(`⚠️ Contato não encontrado`);
         return { status: 'error', reason: 'contact_not_found' };
       }
 
-      // Buscar último alerta do paciente
+      // Buscar alerta ativo
       const alert = await this.prismaService.fallAlert.findFirst({
         where: {
           patientId: contact.patientId,
-          status: {
-            in: ['PENDING', 'VERIFYING'],
-          },
+          status: { in: ['PENDING', 'VERIFYING'] },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: { createdAt: 'desc' },
       });
 
       if (!alert) {
-        this.logger.warn(`⚠️ Nenhum alerta ativo encontrado`);
         return { status: 'error', reason: 'no_active_alert' };
       }
 
-      // Determinar ação baseada no status do alerta
-      let action: string;
+      let action: string | undefined;
 
       if (alert.status === 'VERIFYING') {
-        // Lembrete de verificação: 1=emergência, 2=tudo bem
-        const verificationActionMap = {
-          '1': 'confirm_emergency',  // 🚨 É Emergência!
-          '2': 'false_alarm',         // ✅ Está Tudo Bem
+        // Lembrete: 1=Emergência, 2=Tudo bem
+        const map: Record<string, string> = {
+          '1': 'confirm_emergency',
+          '2': 'false_alarm',
         };
-        action = verificationActionMap[number];
-        this.logger.log(`� Alerta em VERIFYING - Mapeamento lembrete`);
+        action = map[number];
       } else {
-        // Alerta inicial: 1=confirmar, 2=verificar, 3=falso alarme
-        const initialActionMap = {
-          '1': 'confirm_emergency',  // ✅ Confirmar Emergência
-          '2': 'verify',              // 🔍 Estou Verificando
-          '3': 'false_alarm',         // ❌ Falso Alarme
+        // Inicial: 1=Confirmar, 2=Verificar, 3=Falso Alarme
+        const map: Record<string, string> = {
+          '1': 'confirm_emergency',
+          '2': 'verify',
+          '3': 'false_alarm',
         };
-        action = initialActionMap[number];
-        this.logger.log(`🆕 Alerta PENDING - Mapeamento inicial`);
+        action = map[number];
       }
 
       if (!action) {
-        this.logger.warn(`⚠️ Número inválido: ${number} para status ${alert.status}`);
         return { status: 'error', reason: 'invalid_option', number };
       }
 
-      this.logger.log(`✅ Ação: ${action}`);
-      this.logger.log(`🔢 ================================\n`);
-
+      this.logger.log(`✅ Ação identificada (numérica): ${action}`);
       return await this.processAction(phoneNumber, action);
-
     } catch (error: any) {
-      this.logger.error(`❌ Erro ao processar resposta numérica: ${error.message}`);
+      this.logger.error(
+        `❌ Erro ao processar resposta numérica: ${error.message}`,
+      );
       throw error;
     }
   }
 
   /**
-   * Processar ação baseada na resposta (poll ou numérica)
+   * Processar ação baseada na resposta
+   * ADAPTADO PARA O SERVICE FORNECIDO
    */
   private async processAction(phoneNumber: string, action: string) {
     try {
-      this.logger.log(`\n🎯 ================================`);
-      this.logger.log(`🎯 PROCESSANDO AÇÃO`);
-      this.logger.log(`🎯 ================================`);
-      this.logger.log(`📱 Telefone: ${phoneNumber}`);
-      this.logger.log(`🎬 Ação: ${action}`);
-
-      // 1. Buscar contato pelo telefone
       const cleanPhone = phoneNumber.replace(/\D/g, '');
+
+      // 1. Buscar contato e Paciente
       const contact = await this.prismaService.emergencyContact.findFirst({
         where: {
-          phone: {
-            contains: cleanPhone.slice(-9), // Últimos 9 dígitos
-          },
+          phone: { contains: cleanPhone.slice(-9) },
         },
-        include: {
-          patient: true,
-        },
+        include: { patient: true },
       });
 
       if (!contact) {
         this.logger.warn(`⚠️ Contato não encontrado para: ${phoneNumber}`);
-        return { status: 'error', reason: 'contact_not_found', phone: phoneNumber };
+        return { status: 'error', reason: 'contact_not_found' };
       }
 
-      this.logger.log(`👤 Contato encontrado: ${contact.name} (ID: ${contact.id})`);
-      this.logger.log(`👨‍⚕️ Paciente: ${contact.patient.name}`);
+      // 2. Tentar identificar se esse número pertence a um Cuidador (User)
+      // Isso é importante para preencher o campo 'respondedBy' no Service
+      let caregiverId: string | null = null;
 
-      // Buscar cuidador principal deste paciente
-      const caregiverRelation = await this.prismaService.caregiverPatient.findFirst({
+      // Busca se existe um usuário com esse telefone
+      const user = await this.prismaService.user.findFirst({
         where: {
-          patientId: contact.patientId,
-        },
-        include: {
-          caregiver: true,
-        },
+          phone: { contains: cleanPhone.slice(-9) }
+        }
       });
 
-      if (!caregiverRelation) {
-        this.logger.warn(`⚠️ Nenhum cuidador associado ao paciente ${contact.patient.name}`);
-        return { status: 'error', reason: 'no_caregiver_found', patientId: contact.patientId };
+      // Se achou usuário, verifica se ele tem relação com o paciente
+      if (user) {
+        const relation = await this.prismaService.caregiverPatient.findUnique({
+          where: {
+            caregiverId_patientId: {
+              caregiverId: user.id,
+              patientId: contact.patientId
+            }
+          }
+        });
+        // Também pode ser familiar
+        const familyRelation = await this.prismaService.familyRelation.findFirst({
+          where: {
+            familyMemberId: user.id,
+            patientId: contact.patientId
+          }
+        });
+
+        if (relation || familyRelation) {
+          caregiverId = user.id;
+          this.logger.log(`👤 Usuário identificado respondendo: ${user.name} (ID: ${user.id})`);
+        }
       }
 
-      const caregiverId = caregiverRelation.caregiverId;
-      this.logger.log(`👤 Caregiver ID: ${caregiverId} (${caregiverRelation.caregiver.name})`);
-
-      // 2. Buscar último alerta PENDING ou VERIFYING do paciente
+      // 3. Buscar alerta ATIVO (PENDING ou VERIFYING)
       const alert = await this.prismaService.fallAlert.findFirst({
         where: {
           patientId: contact.patientId,
-          status: {
-            in: ['PENDING', 'VERIFYING'],
-          },
+          status: { in: ['PENDING', 'VERIFYING'] },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: { createdAt: 'desc' },
       });
 
       if (!alert) {
-        this.logger.warn(`⚠️ Nenhum alerta ativo encontrado para o paciente ${contact.patient.name}`);
-        return { status: 'error', reason: 'no_active_alert', patientId: contact.patientId };
+        this.logger.warn(
+          `⚠️ Nenhum alerta ativo para o paciente ${contact.patient.name}`,
+        );
+        return { status: 'error', reason: 'no_active_alert' };
       }
 
-      this.logger.log(`🚨 Alerta encontrado: ${alert.id} (Status: ${alert.status})`);
+      // 4. Executar ação no Service
+      // OBS: Passamos fromWhatsApp = true (terceiro argumento) para pular checagens estritas de ID
 
-      // 3. Executar ação
       let result;
       switch (action) {
         case 'confirm_emergency':
-          this.logger.log(`🚨 Confirmando emergência para alerta ${alert.id}...`);
+          this.logger.log(`🚨 Confirmando emergência (WhatsApp)...`);
 
-          // Se o alerta está em VERIFYING, usar confirmAfterVerification
           if (alert.status === 'VERIFYING') {
-            this.logger.log(`🔍 Alerta está em VERIFYING - usando confirmAfterVerification`);
-            await this.fallAlertsService.confirmAfterVerification(alert.id, caregiverId);
+            // Se já estava verificando, usamos confirmAfterVerification
+            await this.fallAlertsService.confirmAfterVerification(
+              alert.id,
+              caregiverId,
+              true // fromWhatsApp
+            );
           } else {
+            // Se estava pendente, confirmação direta
             await this.fallAlertsService.confirmAlert(alert.id);
           }
-
           result = { action: 'emergency_confirmed', alertId: alert.id };
-          this.logger.log(`✅ Emergência confirmada!`);
           break;
 
         case 'verify':
-          this.logger.log(`🔍 Marcando alerta ${alert.id} como verificando...`);
-          await this.fallAlertsService.markVerifying(alert.id, caregiverId);
+          this.logger.log(`🔍 Marcando como verificando (WhatsApp)...`);
+          await this.fallAlertsService.markVerifying(
+            alert.id,
+            caregiverId,
+            true // fromWhatsApp
+          );
           result = { action: 'marked_verifying', alertId: alert.id };
-          this.logger.log(`✅ Alerta marcado como verificando!`);
           break;
 
         case 'false_alarm':
-          this.logger.log(`❌ Marcando alerta ${alert.id} como falso alarme...`);
-          await this.fallAlertsService.markFalseAlarm(alert.id, caregiverId);
+          this.logger.log(`❌ Marcando como falso alarme (WhatsApp)...`);
+          await this.fallAlertsService.markFalseAlarm(
+            alert.id,
+            caregiverId,
+            true // fromWhatsApp
+          );
           result = { action: 'false_alarm_confirmed', alertId: alert.id };
-          this.logger.log(`✅ Falso alarme confirmado!`);
+          break;
+
+        case 'resolve_alert':
+          this.logger.log(`🏁 Finalizando alerta (WhatsApp)...`);
+          await this.fallAlertsService.markResolved(alert.id);
+
+          // Feedback manual via texto, já que markResolved no service notifica via Push
+          await this.messagingService.sendText(
+            phoneNumber,
+            `✅ *Obrigado!* \n\nO alerta foi fechado como resolvido.`
+          );
+          result = { action: 'alert_resolved', alertId: alert.id };
           break;
 
         default:
@@ -429,34 +396,16 @@ export class WebhookController {
           return { status: 'error', reason: 'unknown_action', action };
       }
 
-      this.logger.log(`🎯 ================================\n`);
-
       return {
         status: 'success',
         ...result,
-        contactName: contact.name,
         patientName: contact.patient.name,
       };
 
     } catch (error: any) {
       this.logger.error(`❌ Erro ao processar ação: ${error.message}`);
-      this.logger.error(error.stack);
-      throw error;
+      // Não damos throw aqui para não quebrar o webhook, retornamos erro controlado
+      return { status: 'error', message: error.message };
     }
-  }
-
-  /**
-   * Endpoint de teste (útil para desenvolvimento)
-   */
-
-  @Post('test-action')
-  async testAction(@Body() body: { phoneNumber: string; action: string }) {
-    this.logger.log(`🧪 ================================`);
-    this.logger.log(`🧪 TESTE MANUAL`);
-    this.logger.log(`🧪 Phone: ${body.phoneNumber}`);
-    this.logger.log(`🧪 Action: ${body.action}`);
-    this.logger.log(`🧪 ================================`);
-
-    return await this.processAction(body.phoneNumber, body.action);
   }
 }

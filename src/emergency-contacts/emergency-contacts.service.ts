@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateEmergencyContactDto } from './dtos/CreateEmergencyContactDto';
 import { ContactExistError } from '@src/errors/contactExistError';
+import { UpdateEmergencyContactDto } from './dtos/UpdateEmergencyContactDto';
 
 @Injectable()
 export class EmergencyContactsService {
@@ -50,12 +51,41 @@ export class EmergencyContactsService {
   }
 
   async deleteContact(contactId: string) {
-    return this.prismaService.emergencyContact.delete({
-      where: { id: contactId }
+    return this.prismaService.$transaction(async (tx) => {
+      const contactToDelete = await tx.emergencyContact.findUnique({
+        where: { id: contactId }
+      })
+
+      if (!contactToDelete) {
+        throw new Error('Contato não encontrado');
+      }
+
+      const deleted = await tx.emergencyContact.delete({
+        where: { id: contactId }
+      })
+
+      await tx.emergencyContact.updateMany({
+        where: {
+          patientId: contactToDelete.patientId,
+          priority: {
+            gt: contactToDelete.priority
+          }
+        },
+        data: {
+          priority: {
+            decrement: 1
+          }
+        }
+      })
+
+      return deleted
     })
   }
 
-  async updateContact(contactId: string, data: Partial<CreateEmergencyContactDto>) {
+  async updateContact(contactId: string, data: Partial<UpdateEmergencyContactDto>) {
+
+    //se tiver autorização
+
     return this.prismaService.emergencyContact.update({
       where: { id: contactId },
       data

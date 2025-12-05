@@ -17,6 +17,7 @@ import { GeoModule } from './geo_reverse/geo.module';
 import { InfobipModule } from './infobip/infobip.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { WebhookModule } from './webhook/webhook.module';
+import { PrismaService } from './prisma/prisma.service';
 
 @Module({
   imports: [
@@ -46,6 +47,6 @@ import { WebhookModule } from './webhook/webhook.module';
     FamilyModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, PrismaService],
 })
 export class AppModule { }

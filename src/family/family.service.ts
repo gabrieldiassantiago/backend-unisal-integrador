@@ -329,7 +329,7 @@ export class FamilyService {
     });
   }
 
-  async getFamilyPatients(familyMemberId: string): Promise<FamilyPatientResponseDto[]> {
+  async getFamilyPatients(familyMemberId: string) {
     const familyRelations = await this.prisma.familyRelation.findMany({
       where: {
         familyMemberId,
@@ -337,7 +337,15 @@ export class FamilyService {
         revokedAt: null,
       },
       include: {
-        patient: true,
+        // 👇 ALTERAÇÃO 1: Aninhar o include dos alertas dentro do paciente
+        patient: {
+          include: {
+            fallAlerts: {
+              orderBy: { createdAt: 'desc' }, // Ordenar pelos mais recentes
+              take: 5, // (Opcional) Limitar aos 5 últimos para não pesar a requisição
+            },
+          },
+        },
         permissions: true,
       },
     });
@@ -348,6 +356,17 @@ export class FamilyService {
       birthDate: relation.patient.birthDate,
       gender: relation.patient.gender,
       age: calcAge(relation.patient.birthDate),
+
+      alerts: relation.patient.fallAlerts.map((alert) => ({
+        id: alert.id,
+        status: alert.status,
+        createdAt: alert.createdAt,
+        location: alert.location,
+        latitude: alert.latitude,
+        longitude: alert.longitude,
+        respondedAt: alert.respondedAt,
+      })),
+
       permissions: {
         canViewAlerts: relation.permissions?.canViewAlerts ?? true,
         canRespondAlerts: relation.permissions?.canRespondAlerts ?? false,
@@ -653,4 +672,75 @@ export class FamilyService {
       })),
     };
   }
+
+  async deleteFamilyMemberCompletely(
+    primaryCaregiverId: string,
+    familyMemberId: string,
+    patientId: string,
+  ) {
+    const caregiverRelation = await this.prisma.caregiverPatient.findUnique({
+      where: {
+        caregiverId_patientId: {
+          caregiverId: primaryCaregiverId,
+          patientId,
+        },
+      },
+    });
+
+    if (!caregiverRelation) {
+      throw new ForbiddenException(
+        'Você não tem permissão para remover familiares deste paciente',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+
+      await tx.familyPermissions.deleteMany({
+        where: {
+          relation: {
+            OR: [
+              { primaryCaregiverId: familyMemberId },
+              { familyMemberId: familyMemberId },
+              { patientId: familyMemberId }
+            ]
+          }
+        }
+      });
+
+      await tx.familyRelation.deleteMany({
+        where: {
+          OR: [
+            { primaryCaregiverId: familyMemberId },
+            { familyMemberId: familyMemberId },
+            { patientId: familyMemberId }
+          ]
+        }
+      });
+
+      await tx.pushToken.deleteMany({ where: { userId: familyMemberId } });
+
+      await tx.refreshToken.deleteMany({ where: { userId: familyMemberId } });
+
+      await tx.accessCode.deleteMany({
+        where: {
+          OR: [{ caregiverId: familyMemberId }, { patientId: familyMemberId }]
+        }
+      });
+
+      const deleted = await tx.user.delete({
+        where: { id: familyMemberId },
+      });
+
+      return {
+        message: 'Familiar removido permanentemente',
+        removedUser: {
+          id: deleted.id,
+          name: deleted.name,
+          email: deleted.email,
+        },
+      };
+    });
+  }
+
+
 }
