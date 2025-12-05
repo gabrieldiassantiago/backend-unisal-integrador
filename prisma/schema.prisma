@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -6,7 +5,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = "postgresql://intelisensor:intelisensor@167.99.57.166:5432/intelisensor"
 }
 
 enum Gender {
@@ -16,8 +14,6 @@ enum Gender {
   UNDECLARED
 }
 
-// =================== MODELS ===================
-
 model User {
   id              String   @id @default(uuid())
   name            String
@@ -26,34 +22,27 @@ model User {
   password        String?
   role            Role
   hasAccount      Boolean  @default(false)
-  emailVerified   Boolean  @default(true)  // 🆕 Sempre true, pois só cria após verificar
+  emailVerified   Boolean  @default(true)
   createdAt       DateTime @default(now())
   gender          Gender?
   currentSessionId String?
   phone     String?  
-
-
-  // relações
+  
   devices       Device[]
   contacts      EmergencyContact[]
   patients      CaregiverPatient[] @relation("CaregiverPatients")
   caregivers    CaregiverPatient[] @relation("PatientCaregivers")
   fallAlerts    FallAlert[]        @relation("FallAlertPatient")
 
-  // access codes
   issuedCodes   AccessCode[] @relation("IssuedByCaregiver")
   loginCodes    AccessCode[] @relation("LoginForPatient")
 
-  // sessões
   refreshTokens RefreshToken[]
 
-  // 🆕 alertas respondidos por este cuidador
   respondedAlerts FallAlert[] @relation("AlertRespondedBy")
 
-  // 🆕 push tokens for notifications
   pushTokens PushToken[]
 
-  // 🆕 relações familiares
   primaryCaregiverRelations FamilyRelation[] @relation("PrimaryCaregiverRelations")
   familyMemberRelations     FamilyRelation[] @relation("FamilyMemberRelations") 
   patientFamilyRelations    FamilyRelation[] @relation("PatientFamilyRelations")
@@ -74,10 +63,9 @@ model Device {
   lastSeenAt       DateTime?
   firmwareVersion  String?
   
-  // 🆕 Campos para status em tempo real
   isOnline         Boolean  @default(false)
-  batteryLevel     Int?     // Porcentagem 0-100
-  signalStrength   Int?     // RSSI do WiFi
+  batteryLevel     Int?
+  signalStrength   Int?
   lastHeartbeatAt  DateTime?
   ipAddress        String?
 
@@ -136,17 +124,15 @@ model FallAlert {
 
   confirmationMethod   ConfirmationMethod?
 
-  // 🆕 Campos para rastreamento de resposta do cuidador
-  respondedBy          String?  // UUID do cuidador que respondeu
+  respondedBy          String?
   responder            User?    @relation("AlertRespondedBy", fields: [respondedBy], references: [id])
   respondedAt          DateTime?
-  verificationDeadline DateTime? // Prazo para confirmar após "estou verificando"
+  verificationDeadline DateTime?
 
   @@index([patientId, createdAt])
   @@index([respondedBy])
 }
 
-// Código de LOGIN simplificado para paciente e/ou de PAREAMENTO de device
 model AccessCode {
   id            String   @id @default(uuid())
 
@@ -161,9 +147,8 @@ model AccessCode {
   patientId     String
   patient       User     @relation("LoginForPatient", fields: [patientId], references: [id])
 
-  // 🆕 Dados para convite familiar
-  familyEmail   String?  // Email do familiar a ser convidado
-  familyName    String?  // Nome do familiar
+  familyEmail   String?
+  familyName    String?
 
   expiresAt     DateTime
   usedAt        DateTime?
@@ -195,12 +180,11 @@ model RefreshToken {
   @@index([userId])
 }
 
-// 🆕 Nova tabela para hierarquia familiar
 model FamilyRelation {
   id                 String   @id @default(uuid())
-  primaryCaregiverId String   // Cuidador principal (quem criou)
-  familyMemberId     String   // Familiar convidado
-  patientId          String   // Paciente ao qual ambos têm acesso
+  primaryCaregiverId String
+  familyMemberId     String
+  patientId          String
   
   primaryCaregiver   User     @relation("PrimaryCaregiverRelations", fields: [primaryCaregiverId], references: [id])
   familyMember       User     @relation("FamilyMemberRelations", fields: [familyMemberId], references: [id])
@@ -216,35 +200,32 @@ model FamilyRelation {
   @@index([familyMemberId])
 }
 
-// 🆕 Sistema de permissões granular
 model FamilyPermissions {
   id                String   @id @default(uuid())
   relationId        String   @unique
   relation          FamilyRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
   
-  canViewAlerts       Boolean @default(true)   // Ver alertas de queda
-  canRespondAlerts    Boolean @default(false)  // Responder alertas
-  canViewProfile      Boolean @default(true)   // Ver perfil do paciente
-  canEditProfile      Boolean @default(false)  // Editar perfil
-  canManageContacts   Boolean @default(false)  // Gerenciar contatos emergência
-  canInviteFamily     Boolean @default(false)  // Convidar outros familiares
+  canViewAlerts       Boolean @default(true)
+  canRespondAlerts    Boolean @default(false)
+  canViewProfile      Boolean @default(true)
+  canEditProfile      Boolean @default(false)
+  canManageContacts   Boolean @default(false)
+  canInviteFamily     Boolean @default(false)
 }
-
-// =================== ENUMS ===================
 
 enum Role {
   PATIENT
   CAREGIVER
-  FAMILY_MEMBER  // 🆕 Novo role para familiares
+  FAMILY_MEMBER
 }
 
 enum FallStatus {
-  PENDING        // Alerta criado, aguardando resposta do cuidador prioridade 1
-  VERIFYING      // Cuidador indicou que está indo verificar
-  FALSE_ALARM    // Cuidador marcou como falso alerta
-  CONFIRMED      // Alerta confirmado (automaticamente ou manualmente)
-  IGNORED        // Alerta ignorado/cancelado
-  RESOLVED       // Alerta resolvido (após atendimento)
+  PENDING
+  VERIFYING
+  FALSE_ALARM
+  CONFIRMED
+  IGNORED
+  RESOLVED
 }
 
 enum ConfirmationMethod {
@@ -257,7 +238,7 @@ enum ConfirmationMethod {
 enum CodeType {
   LOGIN_PATIENT
   DEVICE_PAIRING
-  FAMILY_INVITE  // 🆕 Novo tipo para convite de familiares
+  FAMILY_INVITE
 }
 
 enum DeviceStatus {
@@ -266,7 +247,6 @@ enum DeviceStatus {
   MAINTENANCE 
   REVOKED
 }
-
 
 model PushToken {
   id        String   @id @default(cuid())
@@ -278,20 +258,17 @@ model PushToken {
   @@index([userId])
 }
 
-
-// 🆕 Tabela para verificação de email
 model EmailVerification {
   id          String   @id @default(uuid())
   email       String
-  code        String   // Código de 6 dígitos
+  code        String
   verified    Boolean  @default(false)
   expiresAt   DateTime
   createdAt   DateTime @default(now())
   verifiedAt  DateTime?
   attempts    Int      @default(0)
   
-  // 🆕 Dados temporários do usuário (antes de criar)
-  tempUserData Json?  // {name, hashedPassword, role}
+  tempUserData Json?
 
   @@index([email])
   @@index([code])
