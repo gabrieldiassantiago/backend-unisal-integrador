@@ -270,19 +270,9 @@ export class DevicesService {
       },
     });
 
-    return devices.map(device => ({
-      deviceId: device.id,
-      deviceIdentifier: device.deviceIdentifier,
-      patientId: device.patientId,
-      isOnline: device.isOnline ?? false,
-      batteryLevel: device.batteryLevel ?? undefined,
-      signalStrength: device.signalStrength ?? undefined,
-      lastHeartbeatAt: device.lastHeartbeatAt ?? undefined,
-      status: device.status,
-      firmwareVersion: device.firmwareVersion ?? undefined,
-      ipAddress: device.ipAddress ?? undefined,
-    }));
+    return devices;
   }
 
 
 }
+

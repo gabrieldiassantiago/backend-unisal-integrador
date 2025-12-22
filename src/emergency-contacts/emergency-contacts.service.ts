@@ -4,12 +4,18 @@ import { CreateEmergencyContactDto } from './dtos/CreateEmergencyContactDto';
 import { ContactExistError } from '@src/errors/contactExistError';
 import { UpdateEmergencyContactDto } from './dtos/UpdateEmergencyContactDto';
 
+
+
 @Injectable()
 export class EmergencyContactsService {
 
-  constructor(private readonly prismaService: PrismaService) { }
+  constructor(private readonly prismaService: PrismaService,
+
+  ) { }
 
   async createContact(data: CreateEmergencyContactDto) {
+
+
     const patientExists = await this.prismaService.user.findUnique({
       where: { id: data.patientId }
     });
@@ -35,6 +41,7 @@ export class EmergencyContactsService {
     const count = await this.prismaService.emergencyContact.count({
       where: { patientId: data.patientId }
     });
+
 
     return this.prismaService.emergencyContact.create({
       data: {

@@ -57,7 +57,7 @@ export class EmailService implements OnModuleInit {
         subject: '🔐 Verifique seu email - InteliSensor',
         html: emailContent,
         text: `Olá ${userName}! Seu código de verificação é: ${code}`,
-        inline: inlineFiles,
+        
       });
 
     } catch (error) {
