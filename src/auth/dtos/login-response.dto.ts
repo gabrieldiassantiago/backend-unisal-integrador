@@ -1,4 +1,3 @@
-// auth/dto/login-response.dto.ts
 export interface PatientAccess {
   patientId: string;
   patientName: string;
