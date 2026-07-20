@@ -5,6 +5,7 @@ import { LoginDto } from './dtos/login.dto';
 import { LoginResponseDto } from './dtos/login-response.dto';
 import { FamilyMemberLoginDto } from './dtos/family-member-login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { LocalAuthGuard } from './local-auth.guard';
 
 @ApiTags('Autenticação')
 @Controller('auth')
@@ -44,14 +45,9 @@ export class AuthController {
       },
     },
   })
-  async login(@Body() loginDto: LoginDto) {
-    const user = await this.authService.validateUser(loginDto.email, loginDto.password);
-
-    if (!user || 'message' in user) {
-      throw new UnauthorizedException('E-mail ou senha inválidos.');
-    }
-
-    return this.authService.login(user);
+  @UseGuards(LocalAuthGuard)
+  async login(@Request() req, @Body() loginDto: LoginDto) {
+    return this.authService.login(req.user);
   }
 
   @Post('family/login')
@@ -100,14 +96,9 @@ export class AuthController {
       },
     },
   })
-  async familyLogin(@Body() loginDto: FamilyMemberLoginDto) {
-    const user = await this.authService.validateUser(loginDto.email, loginDto.password);
-
-    if (!user || 'message' in user) {
-      throw new UnauthorizedException('E-mail ou senha inválidos.');
-    }
-
-    return this.authService.login(user);
+  @UseGuards(LocalAuthGuard)
+  async familyLogin(@Request() req, @Body() loginDto: FamilyMemberLoginDto) {
+    return this.authService.login(req.user);
   }
 
   @UseGuards(JwtAuthGuard)

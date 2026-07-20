@@ -22,7 +22,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private sessionService: SessionService,
-  ) {}
+  ) { }
 
   async validateUser(
     email: string,
@@ -57,6 +57,7 @@ export class AuthService {
   }
 
   async login(user: ValidatedUser): Promise<LoginResponseDto> {
+
     const sessionId = await this.sessionService.createSession(user.id);
 
     const payload = {

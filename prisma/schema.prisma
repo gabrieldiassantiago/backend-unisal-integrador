@@ -4,7 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 enum Gender {
@@ -210,7 +211,7 @@ model FamilyPermissions {
   canViewProfile      Boolean @default(true)
   canEditProfile      Boolean @default(false)
   canManageContacts   Boolean @default(false)
-  canInviteFamily     Boolean @default(false)
+canInviteFamily     Boolean @default(falase)
 }
 
 enum Role {
